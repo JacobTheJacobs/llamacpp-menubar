@@ -49,49 +49,216 @@ def save_prefs_for_model(path: str, params: dict) -> None:
     _save_prefs(all_prefs)
 
 
-def recommend_params(path: str, ram_gb: float, threads: int, ngl: int = 999, batch: int = 512) -> dict:
-    """Best-effort defaults for this Mac (inspired by Llama-macOS context tiers).
+def detect_hardware() -> dict:
+    """Probe this Mac: total/available RAM, perf cores, Apple GPU if any."""
+    import re
+    import subprocess
 
-    Conservative: one parallel slot, ctx capped so load/warmup stays fast and
-    we don't OOM with huge KV caches.
+    total = 16.0
+    try:
+        out = subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True).strip()
+        total = int(out) / (1024**3)
+    except Exception:
+        pass
+
+    # Available ≈ free + inactive + speculative + purgeable (page size from vm_stat)
+    available = total * 0.45  # fallback guess
+    try:
+        vm = subprocess.check_output(["vm_stat"], text=True)
+        page = 4096
+        m = re.search(r"page size of (\d+)", vm)
+        if m:
+            page = int(m.group(1))
+        pages = {}
+        for line in vm.splitlines():
+            mm = re.match(r"\s*(.+?):\s+(\d+)", line)
+            if mm:
+                pages[mm.group(1).strip().strip('"')] = int(mm.group(2).rstrip("."))
+        keys = (
+            "Pages free",
+            "Pages inactive",
+            "Pages speculative",
+            "Pages purgeable",
+        )
+        available = sum(pages.get(k, 0) for k in keys) * page / (1024**3)
+        # Compressor pressure: if lots compressed, be slightly less aggressive
+        compressed = pages.get("Pages occupied by compressor", 0) * page / (1024**3)
+        if compressed > 2:
+            available = max(0.5, available - compressed * 0.25)
+    except Exception:
+        pass
+
+    perf = 0
+    logical = os.cpu_count() or 4
+    for key in ("hw.perflevel0.logicalcpu", "hw.logicalcpu", "hw.ncpu"):
+        try:
+            n = int(subprocess.check_output(["sysctl", "-n", key], text=True).strip())
+            if n > 0:
+                if "perflevel" in key:
+                    perf = n
+                else:
+                    logical = n
+                    if not perf:
+                        perf = n
+                if "perflevel" in key:
+                    break
+        except Exception:
+            continue
+    if not perf:
+        perf = max(1, logical)
+
+    # Apple GPU core count (Metal) when present
+    gpu_cores = 0
+    chip = ""
+    try:
+        brand = subprocess.check_output(
+            ["sysctl", "-n", "machdep.cpu.brand_string"], text=True
+        ).strip()
+        chip = brand
+        sp = subprocess.check_output(
+            ["system_profiler", "SPDisplaysDataType"], text=True, timeout=8
+        )
+        for line in sp.splitlines():
+            if "Total Number of Cores" in line:
+                gpu_cores = int(re.search(r"(\d+)", line).group(1))
+                break
+            if "Chipset Model" in line and "Apple" in line:
+                chip = line.split(":", 1)[-1].strip()
+    except Exception:
+        pass
+
+    apple_silicon = "apple" in chip.lower() or bool(
+        re.search(r"\bM[0-9]", chip, re.I)
+    )
+
+    return {
+        "total_ram_gb": round(total, 1),
+        "available_ram_gb": round(max(0.5, available), 1),
+        "perf_cores": int(perf),
+        "logical_cores": int(logical),
+        "gpu_cores": int(gpu_cores),
+        "chip": chip or "Mac",
+        "apple_silicon": apple_silicon,
+    }
+
+
+def _estimate_kv_gb(model_gb: float, ctx: int) -> float:
+    """Rough KV + compute buffer estimate for Q4/Q5 GGUF on Metal (1 slot).
+
+    Scales with model size and context. Tuned to stay safe for 7–13B class.
+    """
+    # Baseline ~0.05–0.12 GiB per 1k tokens, scaled by model weight footprint
+    per_1k = 0.055 * max(1.0, model_gb / 3.5)
+    kv = per_1k * (ctx / 1000.0)
+    compute = 0.35 + model_gb * 0.04  # graph / batch buffers
+    return kv + compute
+
+
+def recommend_params(
+    path: str,
+    ram_gb: float = 0,
+    threads: int = 0,
+    ngl: int = 999,
+    batch: int = 512,
+    hw: dict | None = None,
+) -> dict:
+    """Pick the *best / maximum safe* launch profile for *this* machine.
+
+    Strategy:
+      1. Measure total + currently available RAM, perf cores, GPU.
+      2. Budget = min(total − model − OS, available − headroom).
+      3. Choose the **largest** context tier that fits that budget (max quality).
+      4. Full Metal offload on Apple Silicon; threads = performance cores.
+      5. Batch sized for RAM headroom; always 1 parallel slot for chat.
     """
     try:
         size = os.path.getsize(path) / 1_073_741_824
     except OSError:
         size = 0.0
 
-    free = ram_gb - size - 2.5  # OS reserve
-    # Cap context — 128K×N slots made the UI show "Loading model" for a long time
-    if free >= 14:
-        ctx = 32768
-        reason = "Good free RAM — 32K context (fast load, solid chat)."
-    elif free >= 8:
-        ctx = 16384
-        reason = "Balanced — 16K context for this model size."
-    elif free >= 4:
-        ctx = 8192
-        reason = "Moderate free RAM — 8K context."
-    else:
-        ctx = 4096
-        reason = "Tight memory — 4K context to load quickly and stay stable."
+    hw = hw or detect_hardware()
+    total = float(ram_gb) if ram_gb and ram_gb > 0 else float(hw["total_ram_gb"])
+    available = float(hw.get("available_ram_gb") or total * 0.4)
+    perf = int(threads) if threads and threads > 0 else int(hw.get("perf_cores") or 4)
+    apple = bool(hw.get("apple_silicon"))
+    gpu_cores = int(hw.get("gpu_cores") or 0)
+    chip = str(hw.get("chip") or "Mac")
 
-    # Sampling: sensible chat defaults
+    os_reserve = 2.0 if total <= 16 else 2.5 if total <= 32 else 3.0
+    # What we can give the model after weights land
+    after_weights = max(0.5, total - size - os_reserve)
+    # Don't plan on more than ~90% of *currently* free-ish memory either
+    live_budget = max(0.5, available - 1.25)
+    budget = min(after_weights, live_budget)
+    # If the machine has lots of total RAM but little free right now, still allow
+    # a fraction of after_weights (user may free apps) — blend 70/30 toward max
+    budget = max(budget, after_weights * 0.55)
+    budget = min(budget, after_weights)
+
+    # Context tiers high → low: pick MAX that fits
+    tiers = (131072, 65536, 32768, 16384, 8192, 4096)
+    ctx = 4096
+    for t in tiers:
+        if _estimate_kv_gb(size, t) <= budget * 0.92:
+            ctx = t
+            break
+
+    # Threads: all performance cores (best generation throughput)
+    thr = max(1, perf)
+
+    # Batch: larger when we still have headroom after KV estimate
+    kv_now = _estimate_kv_gb(size, ctx)
+    leftover = max(0.0, budget - kv_now)
+    if leftover >= 6:
+        batch_sz = 1024
+    elif leftover >= 3:
+        batch_sz = 512
+    elif leftover >= 1.5:
+        batch_sz = 256
+    else:
+        batch_sz = 128
+    if batch and batch > 0:
+        # Allow caller default only as a soft ceiling when smaller is safer
+        batch_sz = min(max(batch_sz, 128), max(int(batch), batch_sz))
+
+    # GPU layers: full offload on Apple Silicon / when Metal present
+    ngl_out = 999 if apple or gpu_cores > 0 else max(0, int(ngl) if ngl else 0)
+    if not apple and ngl and 0 < int(ngl) < 999:
+        ngl_out = int(ngl)
+
+    # Sampling: high-quality chat defaults (not related to RAM)
+    temp, top_p, top_k, min_p = 0.7, 0.95, 40, 0.05
+    if size >= 20:  # big models: slightly cooler
+        temp = 0.65
+
+    ctx_k = ctx // 1024
+    reason = (
+        f"Max for this Mac ({chip}): {total:.0f} GB RAM, ~{available:.0f} GB free now, "
+        f"{thr} perf threads"
+        + (f", {gpu_cores} GPU cores" if gpu_cores else "")
+        + f" → ctx {ctx_k}K, ngl {ngl_out}, batch {batch_sz} "
+        f"(fits ~{budget:.1f} GB after a {size:.1f} GB model)."
+    )
+
     return {
         "ctx": ctx,
-        "ngl": int(ngl),
-        "threads": int(threads) or 4,
-        "batch": min(int(batch), 512),
+        "ngl": ngl_out,
+        "threads": thr,
+        "batch": batch_sz,
         "n_predict": -1,
         "seed": -1,
-        "temperature": 0.7,
-        "top_p": 0.95,
-        "top_k": 40,
-        "min_p": 0.05,
+        "temperature": temp,
+        "top_p": top_p,
+        "top_k": top_k,
+        "min_p": min_p,
         "repeat_penalty": 1.1,
         "repeat_last_n": 64,
-        "parallel": 1,  # always 1 slot for menu-bar use
+        "parallel": 1,
         "_size_gb": round(size, 2),
-        "_free_gb": round(max(0.0, free), 1),
+        "_free_gb": round(max(0.0, available), 1),
+        "_budget_gb": round(budget, 1),
+        "_total_ram_gb": round(total, 1),
+        "_chip": chip,
         "_reason": reason,
     }
 
@@ -155,15 +322,30 @@ class LaunchPanel:
         self._done = threading.Event()
 
     def open(self) -> None:
+        hw = detect_hardware()
         recommended = recommend_params(
-            self.model_path, self.ram_gb, self.threads, self.ngl, self.batch
+            self.model_path,
+            self.ram_gb or hw["total_ram_gb"],
+            self.threads or hw["perf_cores"],
+            self.ngl,
+            self.batch,
+            hw=hw,
         )
         saved = prefs_for_model(self.model_path)
+        # Saved prefs win for user tweaks, but never above freshly computed max ctx
         values = merge_params(recommended, saved)
+        max_ctx = int(recommended.get("ctx") or 4096)
+        try:
+            if int(values.get("ctx") or 0) > max_ctx:
+                values["ctx"] = max_ctx
+        except Exception:
+            values["ctx"] = max_ctx
 
         model_name = os.path.basename(self.model_path).replace(".gguf", "")
         size = recommended.get("_size_gb", 0)
         free = recommended.get("_free_gb", 0)
+        budget = recommended.get("_budget_gb", free)
+        chip = recommended.get("_chip", "Mac")
         mmproj = None
         try:
             from llama_core import find_mmproj
@@ -171,7 +353,11 @@ class LaunchPanel:
             mmproj = find_mmproj(self.model_path)
         except Exception:
             mmproj = None
-        meta = f"{size:.1f} GB model · ~{free:.0f} GB free after load"
+        meta = (
+            f"{size:.1f} GB model · {chip} · "
+            f"{recommended.get('_total_ram_gb', self.ram_gb):.0f} GB RAM · "
+            f"~{free:.0f} GB free · budget {budget:.1f} GB"
+        )
         if mmproj:
             meta += f" · vision ({os.path.basename(mmproj)})"
         reason = recommended.get("_reason", "")
@@ -191,6 +377,13 @@ class LaunchPanel:
             "values": values,
             "model_path": self.model_path,
             "mmproj": mmproj or "",
+            "hardware": {
+                "chip": chip,
+                "total_ram_gb": recommended.get("_total_ram_gb"),
+                "available_ram_gb": free,
+                "budget_gb": budget,
+                "perf_cores": recommended.get("threads"),
+            },
         }
 
         html_path = _find_html()
@@ -199,8 +392,8 @@ class LaunchPanel:
             template
             .replace("{{MODEL_NAME}}", _html_esc(model_name))
             .replace("{{MODEL_META}}", _html_esc(meta))
-            .replace("{{RAM_GB}}", f"{self.ram_gb:.0f}")
-            .replace("{{THREADS}}", str(self.threads))
+            .replace("{{RAM_GB}}", f"{recommended.get('_total_ram_gb', self.ram_gb):.0f}")
+            .replace("{{THREADS}}", str(recommended.get("threads", self.threads)))
             .replace("{{DEFAULTS_JSON}}", json.dumps(payload))
         )
 

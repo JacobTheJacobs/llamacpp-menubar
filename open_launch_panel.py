@@ -32,14 +32,23 @@ def main() -> int:
 
     model = os.path.abspath(sys.argv[1])
     out = Path(sys.argv[2])
-    ram = float(sys.argv[3]) if len(sys.argv) > 3 else 16.0
-    threads = int(sys.argv[4]) if len(sys.argv) > 4 else 8
+    # Optional overrides; if omitted we fully auto-detect this Mac
+    ram = float(sys.argv[3]) if len(sys.argv) > 3 else 0
+    threads = int(sys.argv[4]) if len(sys.argv) > 4 else 0
     ngl = int(sys.argv[5]) if len(sys.argv) > 5 else 999
     batch = int(sys.argv[6]) if len(sys.argv) > 6 else 512
 
     if not os.path.isfile(model):
         out.write_text(json.dumps({"ok": False, "error": "model missing"}) + "\n")
         return 1
+
+    from launch_panel import detect_hardware
+
+    hw = detect_hardware()
+    if not ram or ram <= 0:
+        ram = float(hw["total_ram_gb"])
+    if not threads or threads <= 0:
+        threads = int(hw["perf_cores"])
 
     done = threading.Event()
     result: dict = {"ok": False, "cancelled": True}

@@ -42,8 +42,6 @@
 | **One click chat** | Opens llama.cpp WebUI when the server is ready |
 | **Vision ready** | Auto-detects `mmproj*.gguf` next to multimodal models |
 
-Inspired by [**Llama-macOS**](https://github.com/ggml-org/Llama-macOS) and [**llama-server-osx**](https://github.com/jaredkhan/llama-server-osx).
-
 ---
 
 ## Menu bar status
@@ -77,6 +75,18 @@ Drop GGUF files under `~/models` (folders become groups in the menu). Vision mod
   <sub>Cards above reflect folders on this machine (Qwen, DictaLM, UI-Venus, …). Any <code>.gguf</code> works.</sub>
 </p>
 
+### Launch settings (classic UI)
+
+Pick a model and get a **MAX for this Mac** panel — auto-probes RAM, free memory, perf cores, and GPU, then picks the **largest safe context** and best threads/batch/Metal settings for *that* machine.
+
+<p align="center">
+  <img src="docs/assets/launch-panel-90s.png" width="640" alt="Classic 90s launch settings window" />
+</p>
+
+<p align="center">
+  <sub>Hardware-aware max profile · tweak if you want · remember per model</sub>
+</p>
+
 ### App icon
 
 <p align="center">
@@ -93,7 +103,7 @@ Drop GGUF files under `~/models` (folders become groups in the menu). Vision mod
 
 ## Features
 
-- **Native Swift host** — real Mach-O binary (same idea as Llama-macOS; not a Python status item)
+- **Native Swift host** — real Mach-O binary (not a script-hosted status item)
 - **Recommended settings modal** — per-model panel with best-guess ctx / ngl / temp / top-p for your RAM
 - **Start / switch / stop** from the menu
 - **Open Chat** → `http://127.0.0.1:8180/` (avoids Docker on 8080)
@@ -218,8 +228,6 @@ llama-menu/
 ## Credits
 
 - [**llama.cpp**](https://github.com/ggml-org/llama.cpp) — engine & WebUI  
-- [**Llama-macOS**](https://github.com/ggml-org/Llama-macOS) — status UX patterns  
-- [**llama-server-osx**](https://github.com/jaredkhan/llama-server-osx) — menu-bar workflow inspiration  
 
 ---
 

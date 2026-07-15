@@ -111,12 +111,41 @@ func findMmproj(for modelPath: String) -> String? {
     return sorted.first.map { (dir as NSString).appendingPathComponent($0) }
 }
 
+/// Estimate KV+compute GB for a GGUF at given ctx (1 slot). Mirrors Python recommender.
+func estimateKvGB(modelGB: Double, ctx: Int) -> Double {
+    let per1k = 0.055 * max(1.0, modelGB / 3.5)
+    let kv = per1k * (Double(ctx) / 1000.0)
+    let compute = 0.35 + modelGB * 0.04
+    return kv + compute
+}
+
+/// Max safe context for this Mac + model (largest tier that fits budget).
 func recommendCtx(modelPath: String) -> Int {
-    let free = totalRamGB() - modelSizeGB(modelPath) - 2.5
-    if free >= 14 { return 32768 }
-    if free >= 8 { return 16384 }
-    if free >= 4 { return 8192 }
+    let size = modelSizeGB(modelPath)
+    let total = totalRamGB()
+    let osReserve = total <= 16 ? 2.0 : (total <= 32 ? 2.5 : 3.0)
+    let afterWeights = max(0.5, total - size - osReserve)
+    // Prefer aggressive max: at least 55% of after-weights budget
+    let budget = afterWeights
+    let tiers = [131072, 65536, 32768, 16384, 8192, 4096]
+    for t in tiers {
+        if estimateKvGB(modelGB: size, ctx: t) <= budget * 0.92 {
+            return t
+        }
+    }
     return 4096
+}
+
+func recommendBatch(modelPath: String, ctx: Int) -> Int {
+    let size = modelSizeGB(modelPath)
+    let total = totalRamGB()
+    let osReserve = total <= 16 ? 2.0 : (total <= 32 ? 2.5 : 3.0)
+    let budget = max(0.5, total - size - osReserve)
+    let leftover = max(0.0, budget - estimateKvGB(modelGB: size, ctx: ctx))
+    if leftover >= 6 { return 1024 }
+    if leftover >= 3 { return 512 }
+    if leftover >= 1.5 { return 256 }
+    return 128
 }
 
 func scanModels(dir: String) -> [(group: String, path: String)] {
@@ -164,7 +193,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var pollTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Menu-bar style app — process identity is our native binary (like Llama-macOS)
+        // Menu-bar style app — process identity is this native Mach-O binary
         NSApp.setActivationPolicy(.accessory)
 
         cfg = loadConfig()
@@ -442,12 +471,20 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func defaultParams(for model: String) -> [String: Any] {
-        let threads = cfg.threads > 0 ? cfg.threads : ProcessInfo.processInfo.activeProcessorCount
+        // Max profile for this machine (fallback if settings panel unavailable)
+        let threads = max(
+            cfg.threads > 0 ? cfg.threads : 0,
+            ProcessInfo.processInfo.activeProcessorCount
+        )
+        // Prefer performance-core count when we can read it via sysctl in Python panel;
+        // Swift fallback uses logical CPUs.
+        let ctx = recommendCtx(modelPath: model)
+        let batch = max(cfg.batch, recommendBatch(modelPath: model, ctx: ctx))
         var p: [String: Any] = [
-            "ctx": recommendCtx(modelPath: model),
-            "ngl": cfg.ngl,
+            "ctx": ctx,
+            "ngl": 999, // full Metal offload on Apple Silicon
             "threads": threads,
-            "batch": cfg.batch,
+            "batch": batch,
             "n_predict": -1,
             "seed": -1,
             "temperature": 0.7,

@@ -35,7 +35,7 @@ cp "$ROOT/resources/"menu_icon*.png "$RES/" 2>/dev/null || true
 cp "$ROOT/resources/"menu_icon*.png "$RES/resources/" 2>/dev/null || true
 cp "$ROOT/resources/icon.icns" "$RES/resources/icon.icns" 2>/dev/null || true
 
-# --- Native Swift binary (same approach as Llama-macOS) ---------------------
+# --- Native Swift binary ----------------------------------------------------
 # The CFBundleExecutable MUST be a real Mach-O binary owned by this app.
 # A bash→Python host shows as "Python" to macOS; status items often never appear.
 echo "==> Compiling native Swift host…"
@@ -47,7 +47,7 @@ chmod +x "$MACOS/Llama Menu"
 file "$MACOS/Llama Menu"
 
 # --- Info.plist -------------------------------------------------------------
-# LSUIElement=true → menu bar only (no Dock icon), matching Llama-macOS accessory policy.
+# LSUIElement=true → menu bar only (no Dock icon).
 cat > "$CONTENTS/Info.plist" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

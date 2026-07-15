@@ -5,357 +5,474 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Launch · {{MODEL_NAME}}</title>
 <style>
+  /* Classic late-90s desktop chrome (Win95 / early Mac OS 8 vibes) */
   :root {
-    --bg: #0c0d10;
-    --bg2: #14161c;
-    --card: rgba(255,255,255,0.04);
-    --card-border: rgba(255,255,255,0.08);
-    --text: rgba(255,255,255,0.92);
-    --muted: rgba(255,255,255,0.48);
-    --faint: rgba(255,255,255,0.28);
-    --accent: #34c759;
-    --accent-dim: rgba(52,199,89,0.15);
-    --accent-text: #3dd968;
-    --warn: #ff9f0a;
-    --danger: #ff453a;
-    --input: rgba(255,255,255,0.06);
-    --radius: 16px;
-    --radius-sm: 10px;
-    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
-    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+    --face: #c0c0c0;
+    --face-dark: #808080;
+    --face-light: #ffffff;
+    --face-shadow: #404040;
+    --navy: #000080;
+    --navy-hi: #1084d0;
+    --teal: #008080;
+    --desktop: #008080;
+    --text: #000000;
+    --disabled: #808080;
+    --field: #ffffff;
+    --select: #000080;
+    --select-text: #ffffff;
+    --font: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, "Segoe UI", Geneva, sans-serif;
+    --mono: "Courier New", Courier, monospace;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
     min-height: 100%;
-    background: var(--bg);
+    background: var(--desktop);
     color: var(--text);
-    font: 13.5px/1.45 var(--font);
-    -webkit-font-smoothing: antialiased;
+    font: 12px/1.35 var(--font);
+    image-rendering: pixelated;
   }
+  /* Desktop pattern */
   body {
-    background:
-      radial-gradient(1200px 600px at 10% -10%, rgba(52,199,89,0.12), transparent 55%),
-      radial-gradient(900px 500px at 100% 0%, rgba(88,86,214,0.10), transparent 50%),
-      var(--bg);
+    background-color: #008080;
+    background-image:
+      linear-gradient(45deg, #007070 25%, transparent 25%),
+      linear-gradient(-45deg, #007070 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #007070 75%),
+      linear-gradient(-45deg, transparent 75%, #007070 75%);
+    background-size: 4px 4px;
+    background-position: 0 0, 0 2px, 2px -2px, -2px 0;
+    padding: 24px 12px 40px;
   }
-  .wrap {
-    max-width: 720px;
+
+  /* Outer window */
+  .window {
+    max-width: 640px;
     margin: 0 auto;
-    padding: 28px 22px 40px;
+    background: var(--face);
+    border-top: 2px solid var(--face-light);
+    border-left: 2px solid var(--face-light);
+    border-right: 2px solid var(--face-shadow);
+    border-bottom: 2px solid var(--face-shadow);
+    box-shadow: 2px 2px 0 #000;
   }
-  header {
+  .titlebar {
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 22px;
-  }
-  .brand {
-    display: flex;
-    gap: 12px;
     align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: linear-gradient(90deg, var(--navy) 0%, var(--navy-hi) 100%);
+    color: #fff;
+    font-weight: bold;
+    padding: 3px 4px 3px 6px;
+    user-select: none;
   }
-  .logo {
-    width: 40px; height: 40px;
-    border-radius: 12px;
-    background: linear-gradient(145deg, #34c759, #1f8f3e);
+  .titlebar .left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .titlebar .icon {
+    width: 16px; height: 16px;
+    background: var(--face);
+    border: 1px solid #000;
     display: grid; place-items: center;
-    box-shadow: 0 8px 24px rgba(52,199,89,0.25);
     flex-shrink: 0;
+    font-size: 11px;
+    line-height: 1;
   }
-  .logo svg { width: 20px; height: 20px; }
-  h1 {
-    font-size: 17px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
+  .titlebar h1 {
+    font-size: 12px;
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .sub {
-    color: var(--muted);
-    font-size: 12.5px;
+  .title-btns { display: flex; gap: 2px; }
+  .tbtn {
+    width: 16px; height: 14px;
+    background: var(--face);
+    border-top: 1px solid var(--face-light);
+    border-left: 1px solid var(--face-light);
+    border-right: 1px solid var(--face-shadow);
+    border-bottom: 1px solid var(--face-shadow);
+    font: bold 10px/12px var(--font);
+    text-align: center;
+    color: #000;
+    cursor: default;
+  }
+
+  .client {
+    padding: 10px;
+  }
+
+  /* Group boxes */
+  fieldset.group {
+    border-top: 1px solid var(--face-shadow);
+    border-left: 1px solid var(--face-shadow);
+    border-right: 1px solid var(--face-light);
+    border-bottom: 1px solid var(--face-light);
+    margin: 0 0 10px;
+    padding: 12px 10px 10px;
+    min-inline-size: auto;
+  }
+  fieldset.group legend {
+    padding: 0 4px;
+    font-weight: bold;
+    color: #000;
+  }
+
+  .meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .meta .name {
+    font-weight: bold;
+    font-size: 13px;
+  }
+  .meta .sub {
+    color: #000;
     margin-top: 2px;
   }
-  .pill {
+  .badge {
+    background: var(--face);
+    border-top: 1px solid var(--face-light);
+    border-left: 1px solid var(--face-light);
+    border-right: 1px solid var(--face-shadow);
+    border-bottom: 1px solid var(--face-shadow);
+    padding: 3px 8px;
     font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-    color: var(--accent-text);
-    background: var(--accent-dim);
-    border: 1px solid rgba(52,199,89,0.28);
-    padding: 6px 10px;
-    border-radius: 999px;
+    font-weight: bold;
     white-space: nowrap;
+    color: #008000;
   }
-  .card {
-    background: var(--card);
-    border: 1px solid var(--card-border);
-    border-radius: var(--radius);
-    padding: 18px 18px 14px;
-    margin-bottom: 14px;
-    backdrop-filter: blur(20px);
-  }
-  .card h2 {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--faint);
-    margin-bottom: 14px;
-  }
-  .rec {
+
+  .rec-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 4px;
+    gap: 6px;
+    margin-bottom: 6px;
   }
-  .rec span {
-    font-size: 12px;
-    color: var(--muted);
-    background: rgba(255,255,255,0.04);
-    border: 1px solid var(--card-border);
-    border-radius: 8px;
-    padding: 6px 10px;
+  .rec-chip {
+    background: var(--face);
+    border-top: 1px solid var(--face-shadow);
+    border-left: 1px solid var(--face-shadow);
+    border-right: 1px solid var(--face-light);
+    border-bottom: 1px solid var(--face-light);
+    padding: 2px 6px;
+    font-family: var(--mono);
+    font-size: 11px;
   }
-  .rec strong { color: var(--text); font-weight: 600; }
+  .rec-chip b { font-family: var(--font); }
+  .hint {
+    font-size: 11px;
+    color: #000;
+    margin-top: 4px;
+  }
+  .hint.green { color: #008000; font-weight: bold; }
+
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px 14px;
+    gap: 10px 14px;
   }
   @media (max-width: 560px) {
     .grid { grid-template-columns: 1fr; }
   }
-  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field { display: flex; flex-direction: column; gap: 3px; }
   .field.full { grid-column: 1 / -1; }
   label {
-    font-size: 12px;
-    color: var(--muted);
+    font-size: 11px;
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
   }
   label em {
     font-style: normal;
-    color: var(--faint);
     font-family: var(--mono);
-    font-size: 11px;
+    color: #000080;
+    font-size: 10px;
   }
-  input[type="number"], input[type="text"], select {
+
+  /* Inset text fields */
+  input[type="number"], input[type="text"] {
     appearance: none;
     width: 100%;
-    background: var(--input);
-    border: 1px solid var(--card-border);
-    color: var(--text);
-    border-radius: var(--radius-sm);
-    padding: 10px 12px;
-    font: 13px/1.3 var(--font);
+    background: var(--field);
+    color: #000;
+    border-top: 2px solid var(--face-shadow);
+    border-left: 2px solid var(--face-shadow);
+    border-right: 2px solid var(--face-light);
+    border-bottom: 2px solid var(--face-light);
+    padding: 4px 5px;
+    font: 12px var(--font);
     outline: none;
-    transition: border-color .15s, background .15s;
   }
-  input:focus, select:focus {
-    border-color: rgba(52,199,89,0.55);
-    background: rgba(52,199,89,0.06);
+  input:focus {
+    outline: 1px dotted #000;
+    outline-offset: -4px;
   }
+
+  /* Classic radio-chip buttons for context */
   .chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 4px;
   }
   .chip {
-    border: 1px solid var(--card-border);
-    background: transparent;
-    color: var(--muted);
-    border-radius: 999px;
-    padding: 6px 11px;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all .12s;
+    min-width: 44px;
+    background: var(--face);
+    border-top: 2px solid var(--face-light);
+    border-left: 2px solid var(--face-light);
+    border-right: 2px solid var(--face-shadow);
+    border-bottom: 2px solid var(--face-shadow);
+    padding: 3px 8px;
+    font: 11px var(--font);
+    color: #000;
+    cursor: default;
   }
-  .chip:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+  .chip:active {
+    border-top: 2px solid var(--face-shadow);
+    border-left: 2px solid var(--face-shadow);
+    border-right: 2px solid var(--face-light);
+    border-bottom: 2px solid var(--face-light);
+  }
   .chip.active {
-    color: var(--accent-text);
-    border-color: rgba(52,199,89,0.45);
-    background: var(--accent-dim);
+    background: var(--select);
+    color: var(--select-text);
+    border-top: 2px solid var(--face-shadow);
+    border-left: 2px solid var(--face-shadow);
+    border-right: 2px solid var(--face-light);
+    border-bottom: 2px solid var(--face-light);
+    font-weight: bold;
   }
-  .hint {
-    font-size: 11.5px;
-    color: var(--faint);
-    margin-top: 10px;
-    line-height: 1.4;
-  }
+
+  /* Classic raised buttons */
   .actions {
     display: flex;
-    gap: 10px;
-    margin-top: 18px;
-    position: sticky;
-    bottom: 16px;
-  }
-  button {
-    font: 600 13.5px/1 var(--font);
-    border: none;
-    border-radius: 12px;
-    padding: 13px 18px;
-    cursor: pointer;
-    transition: transform .08s, opacity .12s, background .12s;
-  }
-  button:active { transform: scale(0.98); }
-  .btn-primary {
-    flex: 1;
-    background: linear-gradient(180deg, #3dd968, #2fb350);
-    color: #04210c;
-    box-shadow: 0 8px 28px rgba(52,199,89,0.28);
-  }
-  .btn-primary:hover { filter: brightness(1.05); }
-  .btn-ghost {
-    background: rgba(255,255,255,0.06);
-    color: var(--muted);
-    border: 1px solid var(--card-border);
-  }
-  .btn-ghost:hover { color: var(--text); }
-  .btn-reset {
-    background: transparent;
-    color: var(--faint);
-    border: 1px solid transparent;
-    padding: 13px 12px;
-  }
-  .btn-reset:hover { color: var(--warn); }
-  .check {
-    display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     margin-top: 12px;
-    color: var(--muted);
-    font-size: 12.5px;
+    padding-top: 4px;
+  }
+  button.btn {
+    min-width: 88px;
+    padding: 4px 14px;
+    background: var(--face);
+    border-top: 2px solid var(--face-light);
+    border-left: 2px solid var(--face-light);
+    border-right: 2px solid var(--face-shadow);
+    border-bottom: 2px solid var(--face-shadow);
+    font: 12px var(--font);
+    color: #000;
+    cursor: default;
+  }
+  button.btn:focus {
+    outline: 1px dotted #000;
+    outline-offset: -5px;
+  }
+  button.btn:active:not(:disabled) {
+    border-top: 2px solid var(--face-shadow);
+    border-left: 2px solid var(--face-shadow);
+    border-right: 2px solid var(--face-light);
+    border-bottom: 2px solid var(--face-light);
+    padding: 5px 13px 3px 15px;
+  }
+  button.btn.default {
+    border: 2px solid #000;
+    box-shadow:
+      inset 1px 1px 0 var(--face-light),
+      inset -1px -1px 0 var(--face-shadow);
+    font-weight: bold;
+  }
+  button.btn:disabled {
+    color: var(--disabled);
+    text-shadow: 1px 1px 0 var(--face-light);
+  }
+  .spacer { flex: 1; }
+
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 11px;
     user-select: none;
   }
-  .check input { accent-color: var(--accent); width: 14px; height: 14px; }
-  footer {
-    margin-top: 16px;
-    text-align: center;
-    color: var(--faint);
-    font-size: 11px;
+  .check input {
+    width: 13px;
+    height: 13px;
+    accent-color: #000080;
   }
+
+  .statusbar {
+    display: flex;
+    border-top: 1px solid var(--face-shadow);
+    margin-top: 10px;
+  }
+  .statusbar div {
+    flex: 1;
+    border-top: 1px solid var(--face-light);
+    border-left: 1px solid var(--face-light);
+    border-right: 1px solid var(--face-shadow);
+    border-bottom: 1px solid var(--face-shadow);
+    padding: 2px 6px;
+    font-size: 11px;
+    min-height: 18px;
+  }
+
   .ok {
     display: none;
     text-align: center;
-    padding: 48px 20px;
+    padding: 36px 16px;
   }
   .ok.show { display: block; }
-  .ok h1 { font-size: 22px; margin: 12px 0 6px; }
+  .ok .big {
+    font-size: 14px;
+    font-weight: bold;
+    margin: 10px 0 6px;
+  }
   form.hide { display: none; }
+
+  /* CRT scanlines subtle */
+  .crt::after {
+    content: "";
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+  }
 </style>
 </head>
-<body>
-  <div class="wrap">
-    <div id="ok" class="ok">
-      <div class="logo" style="margin:0 auto"><svg viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.2 3.2L13 4.5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-      <h1>Starting…</h1>
-      <p class="sub">You can close this window.</p>
+<body class="crt">
+  <div class="window" role="dialog" aria-label="Launch model">
+    <div class="titlebar">
+      <div class="left">
+        <div class="icon">🦙</div>
+        <h1 id="winTitle">Launch · {{MODEL_NAME}}</h1>
+      </div>
+      <div class="title-btns">
+        <div class="tbtn" title="Minimize">_</div>
+        <div class="tbtn" title="Maximize">□</div>
+        <div class="tbtn" id="btnX" title="Close">×</div>
+      </div>
     </div>
 
-    <form id="form">
-      <header>
-        <div class="brand">
-          <div class="logo">
-            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M8 3.5l.6 2.7L11.3 6.8 8.6 7.4 8 10.1 7.4 7.4 4.7 6.8 7.4 6.2 8 3.5z" fill="#fff"/>
-              <rect x="5.2" y="11" width="5.6" height="1.2" rx=".5" fill="#fff" opacity=".9"/>
-            </svg>
-          </div>
-          <div>
-            <h1 id="modelName">{{MODEL_NAME}}</h1>
-            <div class="sub" id="modelMeta">{{MODEL_META}}</div>
-          </div>
-        </div>
-        <div class="pill">Best for this Mac</div>
-      </header>
-
-      <section class="card">
-        <h2>Recommended</h2>
-        <div class="rec" id="recChips"></div>
-        <p class="hint" id="recHint"></p>
-        <p class="hint" id="mmprojHint" style="display:none;color:var(--accent-text)"></p>
-      </section>
-
-      <section class="card">
-        <h2>Runtime</h2>
-        <div class="field full" style="margin-bottom:12px">
-          <label>Context size <em>-c</em></label>
-          <div class="chips" id="ctxChips"></div>
-        </div>
-        <div class="grid">
-          <div class="field">
-            <label>Context tokens <em>ctx</em></label>
-            <input type="number" name="ctx" id="ctx" min="512" step="512" />
-          </div>
-          <div class="field">
-            <label>GPU layers <em>-ngl</em></label>
-            <input type="number" name="ngl" id="ngl" min="0" max="999" step="1" />
-          </div>
-          <div class="field">
-            <label>CPU threads <em>-t</em></label>
-            <input type="number" name="threads" id="threads" min="1" max="64" step="1" />
-          </div>
-          <div class="field">
-            <label>Batch size <em>-b</em></label>
-            <input type="number" name="batch" id="batch" min="32" max="4096" step="32" />
-          </div>
-          <div class="field">
-            <label>Max tokens <em>-n</em></label>
-            <input type="number" name="n_predict" id="n_predict" min="-1" step="1" />
-          </div>
-          <div class="field">
-            <label>Seed <em>-s</em></label>
-            <input type="number" name="seed" id="seed" step="1" />
-          </div>
-        </div>
-        <p class="hint">ngl 999 = all layers on Metal. n_predict −1 = unlimited. seed −1 = random.</p>
-      </section>
-
-      <section class="card">
-        <h2>Sampling</h2>
-        <div class="grid">
-          <div class="field">
-            <label>Temperature <em>--temp</em></label>
-            <input type="number" name="temperature" id="temperature" min="0" max="2" step="0.05" />
-          </div>
-          <div class="field">
-            <label>Top‑p <em>--top-p</em></label>
-            <input type="number" name="top_p" id="top_p" min="0" max="1" step="0.01" />
-          </div>
-          <div class="field">
-            <label>Top‑k <em>--top-k</em></label>
-            <input type="number" name="top_k" id="top_k" min="0" max="200" step="1" />
-          </div>
-          <div class="field">
-            <label>Min‑p <em>--min-p</em></label>
-            <input type="number" name="min_p" id="min_p" min="0" max="1" step="0.01" />
-          </div>
-          <div class="field">
-            <label>Repeat penalty <em>--repeat-penalty</em></label>
-            <input type="number" name="repeat_penalty" id="repeat_penalty" min="0.5" max="2" step="0.05" />
-          </div>
-          <div class="field">
-            <label>Repeat last N <em>--repeat-last-n</em></label>
-            <input type="number" name="repeat_last_n" id="repeat_last_n" min="-1" step="1" />
-          </div>
-        </div>
-      </section>
-
-      <label class="check">
-        <input type="checkbox" name="save_defaults" id="save_defaults" checked />
-        Remember these settings for this model
-      </label>
-
-      <div class="actions">
-        <button type="button" class="btn-reset" id="btnReset">Reset best</button>
-        <button type="button" class="btn-ghost" id="btnCancel">Cancel</button>
-        <button type="submit" class="btn-primary">Start model</button>
+    <div class="client">
+      <div id="ok" class="ok">
+        <div class="icon" style="width:32px;height:32px;margin:0 auto;font-size:20px;border:2px solid #000;background:#c0c0c0;display:grid;place-items:center">✓</div>
+        <div class="big">Starting model…</div>
+        <div>You may close this window.</div>
       </div>
 
-      <footer>Llama Menu · tuned for {{RAM_GB}} GB RAM · {{THREADS}} perf threads</footer>
-    </form>
+      <form id="form">
+        <div class="meta">
+          <div>
+            <div class="name" id="modelName">{{MODEL_NAME}}</div>
+            <div class="sub" id="modelMeta">{{MODEL_META}}</div>
+          </div>
+          <div class="badge">MAX FOR THIS MAC</div>
+        </div>
+
+        <fieldset class="group">
+          <legend>Recommended</legend>
+          <div class="rec-row" id="recChips"></div>
+          <p class="hint" id="recHint"></p>
+          <p class="hint green" id="mmprojHint" style="display:none"></p>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend>Runtime</legend>
+          <div class="field full" style="margin-bottom:8px">
+            <label>Context size <em>-c</em></label>
+            <div class="chips" id="ctxChips"></div>
+          </div>
+          <div class="grid">
+            <div class="field">
+              <label>Context tokens <em>ctx</em></label>
+              <input type="number" name="ctx" id="ctx" min="512" step="512" />
+            </div>
+            <div class="field">
+              <label>GPU layers <em>-ngl</em></label>
+              <input type="number" name="ngl" id="ngl" min="0" max="999" step="1" />
+            </div>
+            <div class="field">
+              <label>CPU threads <em>-t</em></label>
+              <input type="number" name="threads" id="threads" min="1" max="64" step="1" />
+            </div>
+            <div class="field">
+              <label>Batch size <em>-b</em></label>
+              <input type="number" name="batch" id="batch" min="32" max="4096" step="32" />
+            </div>
+            <div class="field">
+              <label>Max tokens <em>-n</em></label>
+              <input type="number" name="n_predict" id="n_predict" min="-1" step="1" />
+            </div>
+            <div class="field">
+              <label>Seed <em>-s</em></label>
+              <input type="number" name="seed" id="seed" step="1" />
+            </div>
+          </div>
+          <p class="hint">ngl 999 = all layers on Metal. n_predict −1 = unlimited. seed −1 = random.</p>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend>Sampling</legend>
+          <div class="grid">
+            <div class="field">
+              <label>Temperature <em>--temp</em></label>
+              <input type="number" name="temperature" id="temperature" min="0" max="2" step="0.05" />
+            </div>
+            <div class="field">
+              <label>Top-p <em>--top-p</em></label>
+              <input type="number" name="top_p" id="top_p" min="0" max="1" step="0.01" />
+            </div>
+            <div class="field">
+              <label>Top-k <em>--top-k</em></label>
+              <input type="number" name="top_k" id="top_k" min="0" max="200" step="1" />
+            </div>
+            <div class="field">
+              <label>Min-p <em>--min-p</em></label>
+              <input type="number" name="min_p" id="min_p" min="0" max="1" step="0.01" />
+            </div>
+            <div class="field">
+              <label>Repeat penalty <em>--repeat-penalty</em></label>
+              <input type="number" name="repeat_penalty" id="repeat_penalty" min="0.5" max="2" step="0.05" />
+            </div>
+            <div class="field">
+              <label>Repeat last N <em>--repeat-last-n</em></label>
+              <input type="number" name="repeat_last_n" id="repeat_last_n" min="-1" step="1" />
+            </div>
+          </div>
+        </fieldset>
+
+        <label class="check">
+          <input type="checkbox" name="save_defaults" id="save_defaults" checked />
+          Remember these settings for this model
+        </label>
+
+        <div class="actions">
+          <button type="button" class="btn" id="btnReset">Reset to max</button>
+          <div class="spacer"></div>
+          <button type="button" class="btn" id="btnCancel">Cancel</button>
+          <button type="submit" class="btn default" id="btnStart">Start model</button>
+        </div>
+
+        <div class="statusbar">
+          <div id="statusLeft">Ready</div>
+          <div id="statusRight">MAX profile · {{RAM_GB}} GB RAM · {{THREADS}} thr</div>
+        </div>
+      </form>
+    </div>
   </div>
 
 <script>
@@ -370,6 +487,7 @@ function apply(values) {
     if (el) el.value = v;
   }
   syncCtxChips();
+  $("statusLeft").textContent = "Settings loaded";
 }
 
 function syncCtxChips() {
@@ -379,9 +497,14 @@ function syncCtxChips() {
   });
 }
 
+function fmtCtx(n) {
+  return n >= 1024 ? `${n / 1024}K` : String(n);
+}
+
 function buildUi() {
   $("modelName").textContent = DEFAULTS.model_name;
   $("modelMeta").textContent = DEFAULTS.model_meta;
+  $("winTitle").textContent = "Launch · " + DEFAULTS.model_name;
 
   const rec = $("recChips");
   rec.innerHTML = "";
@@ -393,14 +516,15 @@ function buildUi() {
     ["temp", DEFAULTS.recommended.temperature],
   ].forEach(([k, v]) => {
     const s = document.createElement("span");
-    s.innerHTML = `${k} <strong>${v}</strong>`;
+    s.className = "rec-chip";
+    s.innerHTML = `${k} <b>${v}</b>`;
     rec.appendChild(s);
   });
   $("recHint").textContent = DEFAULTS.recommend_reason;
   if (DEFAULTS.mmproj) {
     const mh = $("mmprojHint");
     mh.style.display = "block";
-    mh.textContent = "Vision projector: " + DEFAULTS.mmproj.split("/").pop() + " (auto)";
+    mh.textContent = "Vision projector: " + String(DEFAULTS.mmproj).split("/").pop() + " (auto)";
   }
 
   const chips = $("ctxChips");
@@ -414,16 +538,13 @@ function buildUi() {
     b.addEventListener("click", () => {
       $("ctx").value = n;
       syncCtxChips();
+      $("statusLeft").textContent = "Context = " + fmtCtx(n);
     });
     chips.appendChild(b);
   });
 
   apply(DEFAULTS.values);
   $("ctx").addEventListener("input", syncCtxChips);
-}
-
-function fmtCtx(n) {
-  return n >= 1024 ? `${n / 1024}K` : String(n);
 }
 
 function collect() {
@@ -437,21 +558,27 @@ function collect() {
     out[k] = el.type === "number" || el.value !== "" ? Number(el.value) : el.value;
   });
   out.save_defaults = $("save_defaults").checked;
+  if (DEFAULTS.mmproj) out.mmproj = DEFAULTS.mmproj;
   return out;
 }
 
-$("btnReset").addEventListener("click", () => apply(DEFAULTS.recommended));
+$("btnReset").addEventListener("click", () => {
+  apply(DEFAULTS.recommended);
+  $("statusLeft").textContent = "Reset to MAX for this Mac";
+});
 $("btnCancel").addEventListener("click", async () => {
   try { await fetch("/cancel", { method: "POST" }); } catch (_) {}
   window.close();
 });
+$("btnX").addEventListener("click", () => $("btnCancel").click());
 
 $("form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const body = collect();
-  const btn = e.submitter || document.querySelector(".btn-primary");
+  const btn = $("btnStart");
   btn.disabled = true;
   btn.textContent = "Starting…";
+  $("statusLeft").textContent = "Starting model…";
   try {
     const res = await fetch("/launch", {
       method: "POST",
@@ -465,6 +592,7 @@ $("form").addEventListener("submit", async (e) => {
   } catch (err) {
     btn.disabled = false;
     btn.textContent = "Start model";
+    $("statusLeft").textContent = "Error — is Llama Menu still running?";
     alert("Could not start — is Llama Menu still running?");
   }
 });

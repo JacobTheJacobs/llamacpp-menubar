@@ -10,3 +10,6 @@ __pycache__/
 venv/
 .env
 *.app.bak
+
+# Local reference clones (not part of this project)
+docs/reference/
