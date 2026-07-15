@@ -755,14 +755,15 @@ class LlamaController:
         starting = state == ServerState.STARTING
         error = state == ServerState.ERROR
 
+        # Keep emoji + word so the item is always obvious in a crowded menu bar
         if on:
-            label = "Llama !"
+            label = "🦙 Llama !"
         elif starting:
-            label = "Llama …"
+            label = "🦙 Llama …"
         elif error:
-            label = "Llama ×"
+            label = "🦙 Llama ×"
         else:
-            label = "Llama"
+            label = "🦙 Llama"
 
         # Icon path
         if on:

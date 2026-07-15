@@ -34,54 +34,16 @@ cp "$ROOT/resources/"menu_icon*.png "$RES/" 2>/dev/null || true
 cp "$ROOT/resources/"menu_icon*.png "$RES/resources/" 2>/dev/null || true
 cp "$ROOT/resources/icon.icns" "$RES/resources/icon.icns" 2>/dev/null || true
 
-# --- Launcher ---------------------------------------------------------------
-# Resolves a Python with rumps, sets up paths, runs as accessory menu-bar app.
-cat > "$MACOS/Llama Menu" << 'LAUNCHER'
-#!/usr/bin/env bash
-set -euo pipefail
-
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-RES="$ROOT/Resources"
-export LLAMA_MENU_RESOURCES="$RES"
-export PYTHONPATH="${RES}${PYTHONPATH:+:$PYTHONPATH}"
-
-# Prefer a Python with PyObjC (AppKit) — required for the menu bar item.
-find_python() {
-  local candidates=(
-    "${LLAMA_MENU_PYTHON:-}"
-    "/Library/Developer/CommandLineTools/usr/bin/python3"
-    "/opt/homebrew/bin/python3"
-    "/usr/local/bin/python3"
-    "/usr/bin/python3"
-  )
-  local py
-  for py in "${candidates[@]}"; do
-    [[ -z "$py" || ! -x "$py" ]] && continue
-    if "$py" -c "from AppKit import NSStatusBar; from PyObjCTools import AppHelper" 2>/dev/null; then
-      echo "$py"
-      return 0
-    fi
-  done
-  for py in "${candidates[@]}"; do
-    [[ -n "$py" && -x "$py" ]] && echo "$py" && return 0
-  done
-  return 1
-}
-
-PY="$(find_python)" || {
-  osascript -e 'display alert "Llama Menu" message "Python 3 with PyObjC is required.\n\nInstall:\n  python3 -m pip install --user pyobjc-framework-Cocoa"' || true
-  exit 1
-}
-
-if ! "$PY" -c "from AppKit import NSStatusBar; from PyObjCTools import AppHelper" 2>/dev/null; then
-  osascript -e 'display alert "Llama Menu" message "PyObjC is missing.\n\nRun:\n  '"$PY"' -m pip install --user pyobjc-framework-Cocoa"' || true
-  exit 1
-fi
-
-# Pure AppKit menu bar app (not rumps)
-exec "$PY" "$RES/native_app.py"
-LAUNCHER
+# --- Native Swift binary (same approach as Llama-macOS) ---------------------
+# The CFBundleExecutable MUST be a real Mach-O binary owned by this app.
+# A bash→Python host shows as "Python" to macOS; status items often never appear.
+echo "==> Compiling native Swift host…"
+swiftc -O \
+  -target arm64-apple-macos13.0 \
+  -o "$MACOS/Llama Menu" \
+  "$ROOT/NativeHost/main.swift"
 chmod +x "$MACOS/Llama Menu"
+file "$MACOS/Llama Menu"
 
 # --- Info.plist -------------------------------------------------------------
 # LSUIElement=true → menu bar only (no Dock icon), matching Llama-macOS accessory policy.
@@ -116,6 +78,8 @@ cat > "$CONTENTS/Info.plist" << PLIST
   <true/>
   <key>NSHighResolutionCapable</key>
   <true/>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.utilities</string>
   <key>NSSupportsAutomaticGraphicsSwitching</key>
   <true/>
   <key>NSHumanReadableCopyright</key>
