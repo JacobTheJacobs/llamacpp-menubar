@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Launch · {{MODEL_NAME}}</title>
+<style>
+  :root {
+    --bg: #0c0d10;
+    --bg2: #14161c;
+    --card: rgba(255,255,255,0.04);
+    --card-border: rgba(255,255,255,0.08);
+    --text: rgba(255,255,255,0.92);
+    --muted: rgba(255,255,255,0.48);
+    --faint: rgba(255,255,255,0.28);
+    --accent: #34c759;
+    --accent-dim: rgba(52,199,89,0.15);
+    --accent-text: #3dd968;
+    --warn: #ff9f0a;
+    --danger: #ff453a;
+    --input: rgba(255,255,255,0.06);
+    --radius: 16px;
+    --radius-sm: 10px;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font: 13.5px/1.45 var(--font);
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background:
+      radial-gradient(1200px 600px at 10% -10%, rgba(52,199,89,0.12), transparent 55%),
+      radial-gradient(900px 500px at 100% 0%, rgba(88,86,214,0.10), transparent 50%),
+      var(--bg);
+  }
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 28px 22px 40px;
+  }
+  header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 22px;
+  }
+  .brand {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .logo {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    background: linear-gradient(145deg, #34c759, #1f8f3e);
+    display: grid; place-items: center;
+    box-shadow: 0 8px 24px rgba(52,199,89,0.25);
+    flex-shrink: 0;
+  }
+  .logo svg { width: 20px; height: 20px; }
+  h1 {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .sub {
+    color: var(--muted);
+    font-size: 12.5px;
+    margin-top: 2px;
+  }
+  .pill {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--accent-text);
+    background: var(--accent-dim);
+    border: 1px solid rgba(52,199,89,0.28);
+    padding: 6px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    padding: 18px 18px 14px;
+    margin-bottom: 14px;
+    backdrop-filter: blur(20px);
+  }
+  .card h2 {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-bottom: 14px;
+  }
+  .rec {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .rec span {
+    font-size: 12px;
+    color: var(--muted);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 6px 10px;
+  }
+  .rec strong { color: var(--text); font-weight: 600; }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 14px;
+  }
+  @media (max-width: 560px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field.full { grid-column: 1 / -1; }
+  label {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  label em {
+    font-style: normal;
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  input[type="number"], input[type="text"], select {
+    appearance: none;
+    width: 100%;
+    background: var(--input);
+    border: 1px solid var(--card-border);
+    color: var(--text);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font: 13px/1.3 var(--font);
+    outline: none;
+    transition: border-color .15s, background .15s;
+  }
+  input:focus, select:focus {
+    border-color: rgba(52,199,89,0.55);
+    background: rgba(52,199,89,0.06);
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .chip {
+    border: 1px solid var(--card-border);
+    background: transparent;
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 6px 11px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .12s;
+  }
+  .chip:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+  .chip.active {
+    color: var(--accent-text);
+    border-color: rgba(52,199,89,0.45);
+    background: var(--accent-dim);
+  }
+  .hint {
+    font-size: 11.5px;
+    color: var(--faint);
+    margin-top: 10px;
+    line-height: 1.4;
+  }
+  .actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 18px;
+    position: sticky;
+    bottom: 16px;
+  }
+  button {
+    font: 600 13.5px/1 var(--font);
+    border: none;
+    border-radius: 12px;
+    padding: 13px 18px;
+    cursor: pointer;
+    transition: transform .08s, opacity .12s, background .12s;
+  }
+  button:active { transform: scale(0.98); }
+  .btn-primary {
+    flex: 1;
+    background: linear-gradient(180deg, #3dd968, #2fb350);
+    color: #04210c;
+    box-shadow: 0 8px 28px rgba(52,199,89,0.28);
+  }
+  .btn-primary:hover { filter: brightness(1.05); }
+  .btn-ghost {
+    background: rgba(255,255,255,0.06);
+    color: var(--muted);
+    border: 1px solid var(--card-border);
+  }
+  .btn-ghost:hover { color: var(--text); }
+  .btn-reset {
+    background: transparent;
+    color: var(--faint);
+    border: 1px solid transparent;
+    padding: 13px 12px;
+  }
+  .btn-reset:hover { color: var(--warn); }
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 12.5px;
+    user-select: none;
+  }
+  .check input { accent-color: var(--accent); width: 14px; height: 14px; }
+  footer {
+    margin-top: 16px;
+    text-align: center;
+    color: var(--faint);
+    font-size: 11px;
+  }
+  .ok {
+    display: none;
+    text-align: center;
+    padding: 48px 20px;
+  }
+  .ok.show { display: block; }
+  .ok h1 { font-size: 22px; margin: 12px 0 6px; }
+  form.hide { display: none; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div id="ok" class="ok">
+      <div class="logo" style="margin:0 auto"><svg viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.2 3.2L13 4.5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <h1>Starting…</h1>
+      <p class="sub">You can close this window.</p>
+    </div>
+
+    <form id="form">
+      <header>
+        <div class="brand">
+          <div class="logo">
+            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 3.5l.6 2.7L11.3 6.8 8.6 7.4 8 10.1 7.4 7.4 4.7 6.8 7.4 6.2 8 3.5z" fill="#fff"/>
+              <rect x="5.2" y="11" width="5.6" height="1.2" rx=".5" fill="#fff" opacity=".9"/>
+            </svg>
+          </div>
+          <div>
+            <h1 id="modelName">{{MODEL_NAME}}</h1>
+            <div class="sub" id="modelMeta">{{MODEL_META}}</div>
+          </div>
+        </div>
+        <div class="pill">Best for this Mac</div>
+      </header>
+
+      <section class="card">
+        <h2>Recommended</h2>
+        <div class="rec" id="recChips"></div>
+        <p class="hint" id="recHint"></p>
+      </section>
+
+      <section class="card">
+        <h2>Runtime</h2>
+        <div class="field full" style="margin-bottom:12px">
+          <label>Context size <em>-c</em></label>
+          <div class="chips" id="ctxChips"></div>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label>Context tokens <em>ctx</em></label>
+            <input type="number" name="ctx" id="ctx" min="512" step="512" />
+          </div>
+          <div class="field">
+            <label>GPU layers <em>-ngl</em></label>
+            <input type="number" name="ngl" id="ngl" min="0" max="999" step="1" />
+          </div>
+          <div class="field">
+            <label>CPU threads <em>-t</em></label>
+            <input type="number" name="threads" id="threads" min="1" max="64" step="1" />
+          </div>
+          <div class="field">
+            <label>Batch size <em>-b</em></label>
+            <input type="number" name="batch" id="batch" min="32" max="4096" step="32" />
+          </div>
+          <div class="field">
+            <label>Max tokens <em>-n</em></label>
+            <input type="number" name="n_predict" id="n_predict" min="-1" step="1" />
+          </div>
+          <div class="field">
+            <label>Seed <em>-s</em></label>
+            <input type="number" name="seed" id="seed" step="1" />
+          </div>
+        </div>
+        <p class="hint">ngl 999 = all layers on Metal. n_predict −1 = unlimited. seed −1 = random.</p>
+      </section>
+
+      <section class="card">
+        <h2>Sampling</h2>
+        <div class="grid">
+          <div class="field">
+            <label>Temperature <em>--temp</em></label>
+            <input type="number" name="temperature" id="temperature" min="0" max="2" step="0.05" />
+          </div>
+          <div class="field">
+            <label>Top‑p <em>--top-p</em></label>
+            <input type="number" name="top_p" id="top_p" min="0" max="1" step="0.01" />
+          </div>
+          <div class="field">
+            <label>Top‑k <em>--top-k</em></label>
+            <input type="number" name="top_k" id="top_k" min="0" max="200" step="1" />
+          </div>
+          <div class="field">
+            <label>Min‑p <em>--min-p</em></label>
+            <input type="number" name="min_p" id="min_p" min="0" max="1" step="0.01" />
+          </div>
+          <div class="field">
+            <label>Repeat penalty <em>--repeat-penalty</em></label>
+            <input type="number" name="repeat_penalty" id="repeat_penalty" min="0.5" max="2" step="0.05" />
+          </div>
+          <div class="field">
+            <label>Repeat last N <em>--repeat-last-n</em></label>
+            <input type="number" name="repeat_last_n" id="repeat_last_n" min="-1" step="1" />
+          </div>
+        </div>
+      </section>
+
+      <label class="check">
+        <input type="checkbox" name="save_defaults" id="save_defaults" checked />
+        Remember these settings for this model
+      </label>
+
+      <div class="actions">
+        <button type="button" class="btn-reset" id="btnReset">Reset best</button>
+        <button type="button" class="btn-ghost" id="btnCancel">Cancel</button>
+        <button type="submit" class="btn-primary">Start model</button>
+      </div>
+
+      <footer>Llama Menu · tuned for {{RAM_GB}} GB RAM · {{THREADS}} perf threads</footer>
+    </form>
+  </div>
+
+<script>
+const DEFAULTS = {{DEFAULTS_JSON}};
+const CTX_TIERS = [4096, 8192, 16384, 32768, 65536, 131072];
+
+function $(id) { return document.getElementById(id); }
+
+function apply(values) {
+  for (const [k, v] of Object.entries(values)) {
+    const el = $(k);
+    if (el) el.value = v;
+  }
+  syncCtxChips();
+}
+
+function syncCtxChips() {
+  const ctx = Number($("ctx").value);
+  document.querySelectorAll("#ctxChips .chip").forEach(ch => {
+    ch.classList.toggle("active", Number(ch.dataset.ctx) === ctx);
+  });
+}
+
+function buildUi() {
+  $("modelName").textContent = DEFAULTS.model_name;
+  $("modelMeta").textContent = DEFAULTS.model_meta;
+
+  const rec = $("recChips");
+  rec.innerHTML = "";
+  [
+    ["ctx", fmtCtx(DEFAULTS.recommended.ctx)],
+    ["ngl", DEFAULTS.recommended.ngl],
+    ["threads", DEFAULTS.recommended.threads],
+    ["batch", DEFAULTS.recommended.batch],
+    ["temp", DEFAULTS.recommended.temperature],
+  ].forEach(([k, v]) => {
+    const s = document.createElement("span");
+    s.innerHTML = `${k} <strong>${v}</strong>`;
+    rec.appendChild(s);
+  });
+  $("recHint").textContent = DEFAULTS.recommend_reason;
+
+  const chips = $("ctxChips");
+  chips.innerHTML = "";
+  CTX_TIERS.forEach(n => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.dataset.ctx = n;
+    b.textContent = fmtCtx(n);
+    b.addEventListener("click", () => {
+      $("ctx").value = n;
+      syncCtxChips();
+    });
+    chips.appendChild(b);
+  });
+
+  apply(DEFAULTS.values);
+  $("ctx").addEventListener("input", syncCtxChips);
+}
+
+function fmtCtx(n) {
+  return n >= 1024 ? `${n / 1024}K` : String(n);
+}
+
+function collect() {
+  const keys = [
+    "ctx","ngl","threads","batch","n_predict","seed",
+    "temperature","top_p","top_k","min_p","repeat_penalty","repeat_last_n"
+  ];
+  const out = {};
+  keys.forEach(k => {
+    const el = $(k);
+    out[k] = el.type === "number" || el.value !== "" ? Number(el.value) : el.value;
+  });
+  out.save_defaults = $("save_defaults").checked;
+  return out;
+}
+
+$("btnReset").addEventListener("click", () => apply(DEFAULTS.recommended));
+$("btnCancel").addEventListener("click", async () => {
+  try { await fetch("/cancel", { method: "POST" }); } catch (_) {}
+  window.close();
+});
+
+$("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const body = collect();
+  const btn = e.submitter || document.querySelector(".btn-primary");
+  btn.disabled = true;
+  btn.textContent = "Starting…";
+  try {
+    const res = await fetch("/launch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error("launch failed");
+    $("form").classList.add("hide");
+    $("ok").classList.add("show");
+    setTimeout(() => window.close(), 900);
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "Start model";
+    alert("Could not start — is Llama Menu still running?");
+  }
+});
+
+buildUi();
+</script>
+</body>
+</html>

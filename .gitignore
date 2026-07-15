@@ -1,46 +1,12 @@
-# Xcode
+dist/
 build/
-DerivedData/
-*.pbxuser
-*.mode1v3
-*.mode2v3
-*.perspectivev3
-*.xcworkspace/xcuserdata/
-*.xcodeproj/xcuserdata/
-*.swiftpm/
-
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-*.swp
-*~
-.#*
-
-# Python
+*.pyc
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
 .Python
-env/
-venv/
-ENV/
-
-# IDE
-.vscode/
-.idea/
-*.sublime-*
-
-# Build outputs
-*.app
-*.ipa
-*.zip
-
-# Dependencies
-/.build/
-/Pods/
-node_modules/
-
-# Logs
+*.egg-info/
+.DS_Store
 *.log
+.venv/
+venv/
+.env
+*.app.bak
