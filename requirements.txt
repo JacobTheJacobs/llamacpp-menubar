@@ -1,2 +1,2 @@
-rumps>=0.4.0
+# Menu bar shell (required on macOS)
 pyobjc-framework-Cocoa>=9.0; sys_platform == "darwin"

@@ -275,6 +275,7 @@
         <h2>Recommended</h2>
         <div class="rec" id="recChips"></div>
         <p class="hint" id="recHint"></p>
+        <p class="hint" id="mmprojHint" style="display:none;color:var(--accent-text)"></p>
       </section>
 
       <section class="card">
@@ -396,6 +397,11 @@ function buildUi() {
     rec.appendChild(s);
   });
   $("recHint").textContent = DEFAULTS.recommend_reason;
+  if (DEFAULTS.mmproj) {
+    const mh = $("mmprojHint");
+    mh.style.display = "block";
+    mh.textContent = "Vision projector: " + DEFAULTS.mmproj.split("/").pop() + " (auto)";
+  }
 
   const chips = $("ctxChips");
   chips.innerHTML = "";

@@ -35,7 +35,8 @@ except ImportError:
 
 APP_NAME = "Llama Menu"
 BUNDLE_ID = "com.llamamenu.app"
-DEFAULT_PORT = 8080
+# 8080 is often taken by Docker Desktop — use a dedicated port
+DEFAULT_PORT = 8180
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_MODELS_DIR = Path.home() / "models"
 CONFIG_DIR = Path.home() / ".config" / "llama-menu"
@@ -179,6 +180,47 @@ def fmt_size(gb: float) -> str:
     return f"{gb * 1024:.0f} MB"
 
 
+def find_mmproj(model_path: str) -> Optional[str]:
+    """Find a multimodal projector next to a GGUF model (vision / audio).
+
+    Looks in the model directory for common names:
+      mmproj*.gguf, *mmproj*.gguf, projector*.gguf
+    Prefers F16/F32 over quantized when multiple exist.
+    """
+    try:
+        model_path = os.path.abspath(model_path)
+        folder = Path(model_path).parent
+        if not folder.is_dir():
+            return None
+        candidates: list[Path] = []
+        for pat in ("mmproj*.gguf", "*mmproj*.gguf", "projector*.gguf", "*projector*.gguf"):
+            candidates.extend(folder.glob(pat))
+        # Unique, exclude the main model itself
+        seen = set()
+        files: list[Path] = []
+        for c in candidates:
+            key = str(c.resolve())
+            if key in seen:
+                continue
+            if os.path.samefile(c, model_path) if c.exists() else False:
+                continue
+            seen.add(key)
+            files.append(c)
+        if not files:
+            return None
+
+        def rank(p: Path) -> tuple:
+            name = p.name.lower()
+            # Prefer full-precision projectors
+            prec = 0 if any(x in name for x in ("f32", "f16", "fp16", "fp32")) else 1
+            return (prec, len(name), name)
+
+        files.sort(key=rank)
+        return str(files[0].resolve())
+    except Exception:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Single instance
 # ---------------------------------------------------------------------------
@@ -225,14 +267,15 @@ def launch_at_login_program_args() -> list[str]:
 
 
 def set_launch_at_login(enabled: bool) -> bool:
+    """Install LaunchAgent that only runs `open -a 'Llama Menu'` (no KeepAlive)."""
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     LAUNCH_AGENT_PATH.parent.mkdir(parents=True, exist_ok=True)
     try:
+        # Never fight the old Platypus/KeepAlive agent
+        legacy = Path.home() / "Library" / "LaunchAgents" / "com.local.llamacpp-menu.plist"
+        if legacy.is_file():
+            subprocess.run(["launchctl", "unload", str(legacy)], capture_output=True)
         if enabled:
-            args_xml = "\n".join(
-                f"    <string>{a.replace('&', '&amp;').replace('<', '&lt;')}</string>"
-                for a in launch_at_login_program_args()
-            )
             plist = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -240,7 +283,9 @@ def set_launch_at_login(enabled: bool) -> bool:
   <key>Label</key><string>{BUNDLE_ID}</string>
   <key>ProgramArguments</key>
   <array>
-{args_xml}
+    <string>/usr/bin/open</string>
+    <string>-a</string>
+    <string>Llama Menu</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><false/>
@@ -275,7 +320,7 @@ class AppConfig:
     auto_ctx: bool = True
     fixed_ctx: int = 8192
     launch_at_login: bool = True
-    stop_server_on_quit: bool = False
+    stop_server_on_quit: bool = True  # clean shutdown by default
     has_seen_welcome: bool = False
     has_set_default_launch_at_login: bool = False
 
@@ -305,6 +350,13 @@ class AppConfig:
         cfg.models_dir = str(Path(cfg.models_dir).expanduser())
         if not (1024 <= cfg.port <= 65535):
             cfg.port = DEFAULT_PORT
+        # Migrate away from 8080 if Docker (or anything) owns it
+        if cfg.port == 8080 and _port_busy(8080):
+            cfg.port = DEFAULT_PORT
+            try:
+                cfg.save()
+            except Exception:
+                pass
         return cfg
 
     def save(self) -> None:
@@ -315,6 +367,25 @@ class AppConfig:
     def ensure_dirs(self) -> None:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _port_busy(port: int) -> bool:
+    """True if something other than our future bind might steal browser traffic."""
+    try:
+        r = subprocess.run(
+            ["lsof", "-i", f"TCP:{port}", "-sTCP:LISTEN", "-n", "-P"],
+            capture_output=True,
+            text=True,
+        )
+        out = r.stdout.lower()
+        # Docker on *:8080 + llama on 127.0.0.1:8080 confuses browsers (IPv6)
+        if "docker" in out or "com.docke" in out:
+            return True
+        # Multiple listeners = conflict risk
+        lines = [ln for ln in r.stdout.splitlines() if "LISTEN" in ln]
+        return len(lines) > 1
+    except Exception:
+        return False
 
 
 def optimal_params(path: str, cfg: AppConfig, ram_gb: float) -> dict:
@@ -404,9 +475,19 @@ class LlamaController:
                 set_launch_at_login(True)
             self.cfg.save()
 
+        # If an orphan llama-server is already up on our port, adopt it
         alive, healthy = self._probe()
         with self._lock:
             self._apply_state(alive, healthy)
+        # One-time cleanup: legacy server left on 8080 while we use 8180
+        if self.cfg.port != 8080:
+            try:
+                subprocess.run(
+                    ["pkill", "-f", "llama-server.*--port 8080"],
+                    capture_output=True,
+                )
+            except Exception:
+                pass
 
     def bind_status_item(self, item) -> None:
         self.status_item = item
@@ -540,15 +621,46 @@ class LlamaController:
                             pass
             except Exception:
                 pass
+        # Kill by port pattern (our config port)
+        self._kill_port_listeners(self.cfg.port)
         subprocess.run(
             ["pkill", "-f", f"llama-server.*--port {self.cfg.port}"],
             capture_output=True,
         )
+        # Also clear legacy 8080 if we used to run there (Docker may remain)
+        if self.cfg.port != 8080:
+            subprocess.run(
+                ["pkill", "-f", "llama-server.*--port 8080"],
+                capture_output=True,
+            )
         for _ in range(30):
             if not self._pgrep_server() and not self._port_has_llama():
                 break
             time.sleep(0.1)
         self._close_log()
+
+    @staticmethod
+    def _kill_port_listeners(port: int) -> None:
+        """SIGTERM any process listening on port (llama only — not docker)."""
+        try:
+            r = subprocess.run(
+                ["lsof", "-i", f"TCP:{port}", "-sTCP:LISTEN", "-n", "-P", "-t"],
+                capture_output=True,
+                text=True,
+            )
+            for pid_s in r.stdout.split():
+                try:
+                    pid = int(pid_s)
+                    # Only kill llama-server, never docker
+                    cmd = subprocess.check_output(
+                        ["ps", "-p", str(pid), "-o", "args="], text=True
+                    )
+                    if "llama-server" in cmd or "llama-cli" in cmd:
+                        os.kill(pid, signal.SIGTERM)
+                except Exception:
+                    continue
+        except Exception:
+            pass
 
     def _apply_state(self, alive: bool, healthy: bool) -> bool:
         changed = False
@@ -753,13 +865,15 @@ class LlamaController:
 
         if state == ServerState.RUNNING:
             model = short_name(self.rt.model_path or "model", 28)
-            add_disabled(f"●  On  ·  {model}")
+            vision = " · vision" if self.rt.params.get("mmproj") else ""
+            add_disabled(f"●  On  ·  {model}{vision}")
             add_sep()
             add_action(COPY["open_chat"], "openChat:")
             add_action(COPY["stop"], "stopServer:")
             add_sep()
             self._add_model_submenu(menu, target, COPY["switch"])
             add_sep()
+            self._add_stop_on_quit_item(menu, target)
             add_action(COPY["quit"], "quitApp:")
         elif state == ServerState.STARTING:
             model = short_name(self.rt.model_path or "model", 28)
@@ -788,11 +902,34 @@ class LlamaController:
             add_sep()
             self._add_model_submenu(menu, target, COPY["start"])
             add_sep()
+            self._add_stop_on_quit_item(menu, target)
             add_action(COPY["quit"], "quitApp:")
 
         item.setMenu_(menu)
         self._menu_sig = self._compute_menu_sig()
         self.apply_appearance()
+
+    def _add_stop_on_quit_item(self, menu, target) -> None:
+        from AppKit import NSMenuItem, NSControlStateValueOn, NSControlStateValueOff
+
+        mi = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Stop Server on Quit", "toggleStopOnQuit:", ""
+        )
+        mi.setTarget_(target)
+        mi.setEnabled_(True)
+        mi.setState_(
+            NSControlStateValueOn if self.cfg.stop_server_on_quit else NSControlStateValueOff
+        )
+        menu.addItem_(mi)
+
+    def toggle_stop_on_quit(self) -> None:
+        self.cfg.stop_server_on_quit = not self.cfg.stop_server_on_quit
+        self.cfg.save()
+        self.rebuild_menu()
+        self.notify(
+            APP_NAME,
+            "Stop on quit: " + ("on" if self.cfg.stop_server_on_quit else "off"),
+        )
 
     def _add_model_submenu(self, parent_menu, target, label: str) -> None:
         from AppKit import NSMenu, NSMenuItem
@@ -858,9 +995,10 @@ class LlamaController:
             and bool(self.rt.model_path)
             and paths_equal(path, self.rt.model_path or "")
         )
-        name = short_name(path, 34)
+        name = short_name(path, 30)
         prefix = "✓  " if active else "    "
-        title = f"{prefix}{name}    {fmt_size(size)}"
+        vision = " · 👁" if find_mmproj(path) else ""
+        title = f"{prefix}{name}{vision}    {fmt_size(size)}"
         mi = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
             title, "openLaunchForModel:", ""
         )
@@ -924,11 +1062,16 @@ class LlamaController:
         binary = self.cfg.llama_server or discover_llama_server()
         if not binary:
             return
+        # Avoid Docker / multi-listener mess on 8080
+        if self.cfg.port == 8080 and _port_busy(8080):
+            self.cfg.port = DEFAULT_PORT
+            self.cfg.save()
+            self.notify(APP_NAME, f"Port busy — using {DEFAULT_PORT}")
         with self._lock:
             self._ready_gen += 1
             ready_gen = self._ready_gen
-            if self.process_alive():
-                self._kill_existing_server()
+            # Always free our port before start (orphan servers are common)
+            self._kill_existing_server()
 
             self.rt.model_path = path
             self.rt.params = dict(p)
@@ -950,15 +1093,22 @@ class LlamaController:
                 self._log_fp = None
                 log_out = subprocess.DEVNULL
 
+            # Cap ctx hard — huge contexts make WebUI show "Loading model" for minutes
+            ctx = max(512, min(int(p.get("ctx", 8192)), 65536))
+            parallel = max(1, min(int(p.get("parallel", 1)), 4))
+            mmproj = p.get("mmproj") or find_mmproj(path)
+            if mmproj:
+                self.rt.params["mmproj"] = mmproj
             cmd = [
                 binary,
                 "--model", path,
                 "--host", self.cfg.host,
                 "--port", str(self.cfg.port),
                 "-ngl", str(int(p.get("ngl", 999))),
-                "-c", str(int(p.get("ctx", 8192))),
+                "-c", str(ctx),
                 "-t", str(int(p.get("threads", 4))),
                 "-b", str(int(p.get("batch", 512))),
+                "-np", str(parallel),  # 1 slot = faster load, less RAM
                 "-n", str(int(p.get("n_predict", -1))),
                 "-s", str(int(p.get("seed", -1))),
                 "--temp", str(float(p.get("temperature", 0.7))),
@@ -967,10 +1117,15 @@ class LlamaController:
                 "--min-p", str(float(p.get("min_p", 0.05))),
                 "--repeat-penalty", str(float(p.get("repeat_penalty", 1.1))),
                 "--repeat-last-n", str(int(p.get("repeat_last_n", 64))),
+                "--jinja",  # chat templates for WebUI
             ]
+            if mmproj and os.path.isfile(str(mmproj)):
+                cmd.extend(["--mmproj", str(mmproj)])
             try:
                 if self._log_fp:
                     self._log_fp.write("cmd: " + " ".join(cmd) + "\n")
+                    if mmproj:
+                        self._log_fp.write(f"mmproj: {mmproj}\n")
                 self.rt.proc = subprocess.Popen(
                     cmd,
                     stdout=log_out,
@@ -987,7 +1142,11 @@ class LlamaController:
                 return
 
         self.rebuild_menu()
-        self.notify(APP_NAME, f"Starting {short_name(path)}")
+        mm = self.rt.params.get("mmproj")
+        note = short_name(path)
+        if mm:
+            note = f"{note} + vision"
+        self.notify(APP_NAME, f"Starting {note}")
         self._spawn_ready_watcher(ready_gen)
 
     def _spawn_ready_watcher(self, ready_gen: int) -> None:
@@ -1045,13 +1204,15 @@ class LlamaController:
 
     def open_webui(self) -> None:
         if self.rt.state != ServerState.RUNNING:
-            self.notify(APP_NAME, "Start a model first")
+            self.notify(APP_NAME, "Start a model first — wait until it says Ready")
             return
         if not self.health_ok():
-            self.notify(APP_NAME, "Server not ready yet")
+            self.notify(APP_NAME, "Still loading model — wait a few seconds")
             return
-        open_url(self.webui_url)
-        self.notify(APP_NAME, "Opening Chat in browser")
+        # Prefer explicit IPv4 URL so we never hit Docker on ::1:8080
+        url = f"http://127.0.0.1:{self.cfg.port}/"
+        open_url(url)
+        self.notify(APP_NAME, f"Chat · {url}")
 
     def open_log(self) -> None:
         LOG_DIR.mkdir(parents=True, exist_ok=True)

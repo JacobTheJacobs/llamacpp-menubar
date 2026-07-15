@@ -71,6 +71,10 @@ class MenuTarget(NSObject):
         if self.controller:
             self.controller.open_log()
 
+    def toggleStopOnQuit_(self, sender):
+        if self.controller:
+            self.controller.toggle_stop_on_quit()
+
     def quitApp_(self, sender):
         if self.controller:
             self.controller.quit_app()

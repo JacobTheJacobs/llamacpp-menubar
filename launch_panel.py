@@ -50,39 +50,37 @@ def save_prefs_for_model(path: str, params: dict) -> None:
 
 
 def recommend_params(path: str, ram_gb: float, threads: int, ngl: int = 999, batch: int = 512) -> dict:
-    """Best-effort defaults for this Mac (inspired by Llama-macOS context tiers)."""
+    """Best-effort defaults for this Mac (inspired by Llama-macOS context tiers).
+
+    Conservative: one parallel slot, ctx capped so load/warmup stays fast and
+    we don't OOM with huge KV caches.
+    """
     try:
         size = os.path.getsize(path) / 1_073_741_824
     except OSError:
         size = 0.0
 
     free = ram_gb - size - 2.5  # OS reserve
-    # Context tiers: pick largest that still leaves headroom
-    if free >= 18:
-        ctx = 131072
-        reason = "Plenty of free RAM — 128K context is comfortable."
-    elif free >= 14:
-        ctx = 65536
-        reason = "Strong headroom — 64K context recommended."
-    elif free >= 10:
+    # Cap context — 128K×N slots made the UI show "Loading model" for a long time
+    if free >= 14:
         ctx = 32768
-        reason = "Good balance of speed and context — 32K."
-    elif free >= 6:
+        reason = "Good free RAM — 32K context (fast load, solid chat)."
+    elif free >= 8:
         ctx = 16384
-        reason = "Moderate free RAM — 16K context."
-    elif free >= 3:
+        reason = "Balanced — 16K context for this model size."
+    elif free >= 4:
         ctx = 8192
-        reason = "Limited free RAM — 8K context keeps you safe."
+        reason = "Moderate free RAM — 8K context."
     else:
         ctx = 4096
-        reason = "Tight memory — 4K context to avoid pressure."
+        reason = "Tight memory — 4K context to load quickly and stay stable."
 
-    # Sampling: sensible chat defaults (llama-server defaults, slightly tuned)
+    # Sampling: sensible chat defaults
     return {
         "ctx": ctx,
         "ngl": int(ngl),
         "threads": int(threads) or 4,
-        "batch": int(batch),
+        "batch": min(int(batch), 512),
         "n_predict": -1,
         "seed": -1,
         "temperature": 0.7,
@@ -91,6 +89,7 @@ def recommend_params(path: str, ram_gb: float, threads: int, ngl: int = 999, bat
         "min_p": 0.05,
         "repeat_penalty": 1.1,
         "repeat_last_n": 64,
+        "parallel": 1,  # always 1 slot for menu-bar use
         "_size_gb": round(size, 2),
         "_free_gb": round(max(0.0, free), 1),
         "_reason": reason,
@@ -165,16 +164,33 @@ class LaunchPanel:
         model_name = os.path.basename(self.model_path).replace(".gguf", "")
         size = recommended.get("_size_gb", 0)
         free = recommended.get("_free_gb", 0)
+        mmproj = None
+        try:
+            from llama_core import find_mmproj
+
+            mmproj = find_mmproj(self.model_path)
+        except Exception:
+            mmproj = None
         meta = f"{size:.1f} GB model · ~{free:.0f} GB free after load"
+        if mmproj:
+            meta += f" · vision ({os.path.basename(mmproj)})"
         reason = recommended.get("_reason", "")
+        if mmproj:
+            reason += " Multimodal projector found — will pass --mmproj automatically."
+
+        rec_clean = {k: v for k, v in recommended.items() if not k.startswith("_")}
+        if mmproj:
+            rec_clean["mmproj"] = mmproj
+            values["mmproj"] = mmproj
 
         payload = {
             "model_name": model_name,
             "model_meta": meta,
             "recommend_reason": reason,
-            "recommended": {k: v for k, v in recommended.items() if not k.startswith("_")},
+            "recommended": rec_clean,
             "values": values,
             "model_path": self.model_path,
+            "mmproj": mmproj or "",
         }
 
         html_path = _find_html()
@@ -315,6 +331,9 @@ def _sanitize_params(data: dict) -> dict:
     repeat_penalty = max(0.5, min(repeat_penalty, 2.0))
     repeat_last_n = int(num("repeat_last_n", 64, float))
 
+    parallel = int(num("parallel", 1, float))
+    parallel = max(1, min(parallel, 4))
+
     return {
         "ctx": ctx,
         "ngl": ngl,
@@ -328,4 +347,5 @@ def _sanitize_params(data: dict) -> dict:
         "min_p": min_p,
         "repeat_penalty": repeat_penalty,
         "repeat_last_n": repeat_last_n,
+        "parallel": parallel,
     }
