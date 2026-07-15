@@ -338,7 +338,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func startModel(_ sender: NSMenuItem) {
         guard let path = sender.representedObject as? String else { return }
-        startServer(model: path)
+        // Always show recommended-settings panel for this Mac first
+        openSettingsPanel(for: path)
     }
 
     @objc private func stopServerAction() { stopServer() }
@@ -361,9 +362,143 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.terminate(nil)
     }
 
+    // MARK: Settings panel (recommended for this PC)
+
+    /// Opens the HTML launch panel (Python bridge). On Start → startServer with chosen params.
+    private func openSettingsPanel(for model: String) {
+        let threads = cfg.threads > 0 ? cfg.threads : ProcessInfo.processInfo.activeProcessorCount
+        let ram = totalRamGB()
+        let resultURL = configDir.appendingPathComponent("logs/last_launch.json")
+        try? FileManager.default.removeItem(at: resultURL)
+
+        // Resolve Resources for both Bundle.main and .../Contents/MacOS/binary layout
+        let resources = resolveResourcesDir()
+        let scriptPath = resources.appendingPathComponent("open_launch_panel.py").path
+
+        let python = discoverPython()
+        guard FileManager.default.fileExists(atPath: scriptPath) else {
+            // Fallback: start with recommended defaults if panel missing
+            logLine("launch panel missing at \(scriptPath) — using defaults")
+            startServer(model: model, params: defaultParams(for: model))
+            return
+        }
+
+        let n = Process()
+        // brief note
+        let note = Process()
+        note.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        note.arguments = [
+            "-e",
+            "display notification \"Opening recommended settings for \(shortName(model))…\" with title \"Llama Menu\"",
+        ]
+        try? note.run()
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: python)
+            proc.arguments = [
+                scriptPath,
+                model,
+                resultURL.path,
+                String(format: "%.1f", ram),
+                "\(threads)",
+                "\(self.cfg.ngl)",
+                "\(self.cfg.batch)",
+            ]
+            var env = ProcessInfo.processInfo.environment
+            env["PYTHONPATH"] = resources.path
+            env["LLAMA_MENU_RESOURCES"] = resources.path
+            proc.environment = env
+            proc.currentDirectoryURL = resources
+
+            do {
+                try proc.run()
+                proc.waitUntilExit()
+            } catch {
+                DispatchQueue.main.async {
+                    self.startServer(model: model, params: self.defaultParams(for: model))
+                }
+                return
+            }
+
+            DispatchQueue.main.async {
+                self.handlePanelResult(resultURL: resultURL, fallbackModel: model)
+            }
+        }
+    }
+
+    private func handlePanelResult(resultURL: URL, fallbackModel: String) {
+        guard let data = try? Data(contentsOf: resultURL),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let ok = obj["ok"] as? Bool, ok,
+              let path = obj["path"] as? String,
+              let params = obj["params"] as? [String: Any]
+        else {
+            // Cancelled or failed — do not auto-start
+            logLine("launch panel cancelled or failed")
+            return
+        }
+        startServer(model: path, params: params)
+    }
+
+    private func defaultParams(for model: String) -> [String: Any] {
+        let threads = cfg.threads > 0 ? cfg.threads : ProcessInfo.processInfo.activeProcessorCount
+        var p: [String: Any] = [
+            "ctx": recommendCtx(modelPath: model),
+            "ngl": cfg.ngl,
+            "threads": threads,
+            "batch": cfg.batch,
+            "n_predict": -1,
+            "seed": -1,
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "top_k": 40,
+            "min_p": 0.05,
+            "repeat_penalty": 1.1,
+            "repeat_last_n": 64,
+            "parallel": 1,
+        ]
+        if let mm = findMmproj(for: model) {
+            p["mmproj"] = mm
+        }
+        return p
+    }
+
+    private func discoverPython() -> String {
+        let candidates = [
+            "/Library/Developer/CommandLineTools/usr/bin/python3",
+            "/opt/homebrew/bin/python3",
+            "/usr/local/bin/python3",
+            "/usr/bin/python3",
+        ]
+        for c in candidates where FileManager.default.isExecutableFile(atPath: c) {
+            return c
+        }
+        return "/usr/bin/python3"
+    }
+
+    private func resolveResourcesDir() -> URL {
+        if let r = Bundle.main.resourceURL,
+           FileManager.default.fileExists(atPath: r.appendingPathComponent("launch.html").path) {
+            return r
+        }
+        // Executable at App.app/Contents/MacOS/X → Resources beside Contents
+        let exe = Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])
+        let contents = exe.deletingLastPathComponent().deletingLastPathComponent()
+        let res = contents.appendingPathComponent("Resources")
+        if FileManager.default.fileExists(atPath: res.path) {
+            return res
+        }
+        // Dev fallback
+        return URL(fileURLWithPath: #file)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("resources")
+    }
+
     // MARK: Server
 
-    private func startServer(model: String) {
+    private func startServer(model: String, params: [String: Any]) {
         stopServer()
 
         let binary = cfg.llama_server
@@ -374,35 +509,56 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
-        let ctx = recommendCtx(modelPath: model)
-        let threads = cfg.threads > 0 ? cfg.threads : ProcessInfo.processInfo.activeProcessorCount
+        let ctx = min(max(intParam(params, "ctx", recommendCtx(modelPath: model)), 512), 65536)
+        let threads = intParam(params, "threads", cfg.threads > 0 ? cfg.threads : ProcessInfo.processInfo.activeProcessorCount)
+        let ngl = intParam(params, "ngl", cfg.ngl)
+        let batch = intParam(params, "batch", cfg.batch)
+        let parallel = max(1, min(intParam(params, "parallel", 1), 4))
+        let nPredict = intParam(params, "n_predict", -1)
+        let seed = intParam(params, "seed", -1)
+        let temp = doubleParam(params, "temperature", 0.7)
+        let topP = doubleParam(params, "top_p", 0.95)
+        let topK = intParam(params, "top_k", 40)
+        let minP = doubleParam(params, "min_p", 0.05)
+        let repPen = doubleParam(params, "repeat_penalty", 1.1)
+        let repLast = intParam(params, "repeat_last_n", 64)
+
         var args = [
             "--model", model,
             "--host", cfg.host,
             "--port", "\(cfg.port)",
-            "-ngl", "\(cfg.ngl)",
+            "-ngl", "\(ngl)",
             "-c", "\(ctx)",
             "-t", "\(threads)",
-            "-b", "\(cfg.batch)",
-            "-np", "1",
+            "-b", "\(batch)",
+            "-np", "\(parallel)",
+            "-n", "\(nPredict)",
+            "-s", "\(seed)",
+            "--temp", String(format: "%.4g", temp),
+            "--top-p", String(format: "%.4g", topP),
+            "--top-k", "\(topK)",
+            "--min-p", String(format: "%.4g", minP),
+            "--repeat-penalty", String(format: "%.4g", repPen),
+            "--repeat-last-n", "\(repLast)",
             "--jinja",
         ]
-        if let mm = findMmproj(for: model) {
+        let mmproj = (params["mmproj"] as? String) ?? findMmproj(for: model)
+        if let mm = mmproj, FileManager.default.fileExists(atPath: mm) {
             args += ["--mmproj", mm]
         }
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: binary)
         proc.arguments = args
-        // Log file
         ensureConfigDir()
         if !FileManager.default.fileExists(atPath: logPath.path) {
             FileManager.default.createFile(atPath: logPath.path, contents: nil)
         }
         if let fh = try? FileHandle(forWritingTo: logPath) {
             fh.seekToEndOfFile()
-            let header = "\n--- \(Date()) start \(shortName(model)) ctx=\(ctx) ---\n"
+            let header = "\n--- \(Date()) start \(shortName(model)) ctx=\(ctx) ngl=\(ngl) ---\n"
             if let d = header.data(using: .utf8) { fh.write(d) }
+            if let d = ("params: \(params)\n").data(using: .utf8) { fh.write(d) }
             proc.standardOutput = fh
             proc.standardError = fh
         }
@@ -415,7 +571,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             errorMessage = ""
             logLine("started pid=\(proc.processIdentifier) \(args.joined(separator: " "))")
             rebuildMenu()
-            // Poll for readiness off main thread
             let pid = proc.processIdentifier
             DispatchQueue.global(qos: .userInitiated).async {
                 Task { await self.waitReady(pid: pid) }
@@ -425,6 +580,20 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             errorMessage = error.localizedDescription
             rebuildMenu()
         }
+    }
+
+    private func intParam(_ p: [String: Any], _ k: String, _ def: Int) -> Int {
+        if let i = p[k] as? Int { return i }
+        if let n = p[k] as? NSNumber { return n.intValue }
+        if let d = p[k] as? Double { return Int(d) }
+        return def
+    }
+
+    private func doubleParam(_ p: [String: Any], _ k: String, _ def: Double) -> Double {
+        if let d = p[k] as? Double { return d }
+        if let n = p[k] as? NSNumber { return n.doubleValue }
+        if let i = p[k] as? Int { return Double(i) }
+        return def
     }
 
     private func stopServer() {

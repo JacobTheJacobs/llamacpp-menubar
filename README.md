@@ -1,42 +1,134 @@
-# Llama Menu
+<p align="center">
+  <img src="docs/assets/app-icon.png" width="120" alt="Llama Menu icon" />
+</p>
 
-A macOS **menu bar app** for running [llama.cpp](https://github.com/ggerganov/llama.cpp) `llama-server` with your local GGUF models.
+<h1 align="center">Llama Menu</h1>
 
-Inspired by [Llama-macOS](https://github.com/ggml-org/Llama-macOS) (status lifecycle, launch-at-login, accessory UI) and [llama-server-osx](https://github.com/jaredkhan/llama-server-osx) (model folders, config, logs).
+<p align="center">
+  <strong>Native macOS menu bar control for local <a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a></strong><br/>
+  Start · switch · stop GGUF models · open chat · Metal — all on your Mac
+</p>
 
-![menu bar](resources/icon.png)
+<p align="center">
+  <img src="docs/assets/hero.png" width="820" alt="Llama Menu hero" />
+</p>
+
+<p align="center">
+  <img alt="macOS" src="https://img.shields.io/badge/macOS-13%2B-black?style=for-the-badge&logo=apple&logoColor=white" />
+  <img alt="Swift" src="https://img.shields.io/badge/Swift-5-F05138?style=for-the-badge&logo=swift&logoColor=white" />
+  <img alt="llama.cpp" src="https://img.shields.io/badge/llama.cpp-server-1a1a2e?style=for-the-badge" />
+  <img alt="License" src="https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge" />
+  <img alt="Version" src="https://img.shields.io/badge/version-1.6.0-3b82f6?style=for-the-badge" />
+  <img alt="Local" src="https://img.shields.io/badge/100%25-local-a855f7?style=for-the-badge" />
+</p>
+
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#usage">Usage</a> ·
+  <a href="#menu-bar-status">Menu bar</a> ·
+  <a href="#models">Models</a> ·
+  <a href="#config">Config</a>
+</p>
+
+---
+
+## Why Llama Menu?
+
+| | |
+|:--|:--|
+| **Tiny** | Native Swift menu bar host (~200 KB binary + resources) |
+| **Local** | Models stay on disk; API on `127.0.0.1` only by default |
+| **Smart defaults** | Context / threads / sampling tuned for *this* Mac’s RAM |
+| **One click chat** | Opens llama.cpp WebUI when the server is ready |
+| **Vision ready** | Auto-detects `mmproj*.gguf` next to multimodal models |
+
+Inspired by [**Llama-macOS**](https://github.com/ggml-org/Llama-macOS) and [**llama-server-osx**](https://github.com/jaredkhan/llama-server-osx).
+
+---
+
+## Menu bar status
+
+The live control lives in the **top-right** of the menu bar (near Wi‑Fi / clock):
+
+<p align="center">
+  <img src="docs/assets/menubar-mock.png" width="560" alt="Menu bar mock with Llama Menu" />
+</p>
+
+| State | Icon | Label |
+|:-----:|:----:|:------|
+| **Off** | <img src="docs/assets/menubar-off-lg.png" width="48" /> | `🦙 Llama` |
+| **On** | <img src="docs/assets/menubar-on-lg.png" width="48" /> | `🦙 Llama !` (green tile) |
+| **Starting** | <img src="docs/assets/menubar-busy-lg.png" width="48" /> | `🦙 Llama …` (orange) |
+| **Error** | <img src="docs/assets/menubar-error-lg.png" width="48" /> | `🦙 Llama ×` (red) |
+
+> **Tip:** If the bar is crowded, check the **`»`** overflow on the right side of the menu bar.
+
+---
+
+## Models
+
+Drop GGUF files under `~/models` (folders become groups in the menu). Vision models with a sibling `mmproj*.gguf` show a 👁 marker and pass `--mmproj` automatically.
+
+<p align="center">
+  <img src="docs/assets/models-grid.png" width="700" alt="Local model folders as cards" />
+</p>
+
+<p align="center">
+  <sub>Cards above reflect folders on this machine (Qwen, DictaLM, UI-Venus, …). Any <code>.gguf</code> works.</sub>
+</p>
+
+### App icon
+
+<p align="center">
+  <img src="docs/assets/app-icon.png" width="96" alt="App icon" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="docs/assets/menubar-on-lg.png" width="72" alt="Menu bar on glyph" />
+</p>
+
+<p align="center">
+  <sub>Finder / app icon &nbsp;·&nbsp; Menu bar “on” glyph</sub>
+</p>
+
+---
 
 ## Features
 
-- **Menu bar only** — no Dock icon (`LSUIElement`)
-- **Start / switch / stop** models from `~/models` (configurable)
-- **Auto params** from free RAM (context size, Metal layers, threads)
-- **Health checks** — “Ready” only when the API answers
-- **Copy API URL** + **Open WebUI**
-- **Launch at Login** (LaunchAgent; on by default after first launch)
-- **Server logs** under `~/.config/llama-menu/logs/`
-- **Single instance** lock
-- Shippable **`.app` bundle** + install scripts
+- **Native Swift host** — real Mach-O binary (same idea as Llama-macOS; not a Python status item)
+- **Recommended settings modal** — per-model panel with best-guess ctx / ngl / temp / top-p for your RAM
+- **Start / switch / stop** from the menu
+- **Open Chat** → `http://127.0.0.1:8180/` (avoids Docker on 8080)
+- **Metal** via `-ngl 999` by default
+- **Health checks** — “Ready” only when `/health` answers
+- **Stop server on quit** (toggle in menu)
+- **Logs** at `~/.config/llama-menu/logs/server.log`
 
-## Requirements
+---
 
-- macOS 12+
-- Python 3.9+ with [`rumps`](https://github.com/jaredks/rumps)
-- [`llama-server`](https://github.com/ggerganov/llama.cpp) (Homebrew: `brew install llama.cpp`)
-- GGUF models in `~/models` (or set `models_dir` in config)
+## Install
 
-## Install (shipped app)
+### Requirements
+
+| Dependency | Notes |
+|:-----------|:------|
+| **macOS 13+** | Apple Silicon recommended |
+| **[llama.cpp](https://github.com/ggml-org/llama.cpp)** | `brew install llama.cpp` |
+| **GGUF models** | e.g. under `~/models/**/*.gguf` |
+| **Xcode CLT / Swift** | To build the native host (`swiftc`) |
+
+### Build & install
 
 ```sh
-# deps
-python3 -m pip install --user rumps
-brew install llama.cpp   # if needed
+git clone <your-repo-url> llama-menu
+cd llama-menu
 
-# build + install to /Applications and launch
-./scripts/install.sh
+# needs llama-server on PATH or at /opt/homebrew/bin/llama-server
+brew install llama.cpp
+
+./scripts/build_app.sh
+./scripts/install.sh          # → /Applications/Llama Menu.app + launch
 ```
 
-Or build only:
+Build only:
 
 ```sh
 ./scripts/build_app.sh
@@ -47,28 +139,35 @@ Uninstall:
 
 ```sh
 ./scripts/uninstall.sh
-# optional: also wipe config
-./scripts/uninstall.sh --purge-config
+./scripts/uninstall.sh --purge-config   # also wipe ~/.config/llama-menu
 ```
 
-## Dev launch
-
-```sh
-./launch.sh
-# or
-python3 llama_menu.py
-```
+---
 
 ## Usage
 
-1. Click the menu bar icon.
-2. **Start Server** → pick a `.gguf` model.
-3. Wait for **Ready** (notification).
-4. Point clients at `http://127.0.0.1:8080/v1`.
+1. Click **`🦙 Llama`** in the **menu bar** (top-right).
+2. **Start Model** → pick a `.gguf`.
+3. **Settings panel** opens with recommended params for this Mac — tweak or **Start model**.
+4. Wait for **Ready** (notification + green **!**).
+5. **Open Chat** or call the API:
 
 ```sh
-curl http://127.0.0.1:8080/v1/models
+# List models
+curl http://127.0.0.1:8180/v1/models
+
+# Chat completion
+curl http://127.0.0.1:8180/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "YOUR-MODEL.gguf",
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
 ```
+
+> **Port:** default is **8180** (Docker often owns **8080**).
+
+---
 
 ## Config
 
@@ -76,40 +175,60 @@ curl http://127.0.0.1:8080/v1/models
 
 | Key | Default | Notes |
 |-----|---------|--------|
-| `llama_server` | auto-detect | Path to binary |
+| `llama_server` | auto | Path to `llama-server` |
 | `models_dir` | `~/models` | Recursive `*.gguf` scan |
-| `host` | `127.0.0.1` | Use `0.0.0.0` to expose LAN (careful) |
-| `port` | `8080` | 1024–65535 |
+| `host` | `127.0.0.1` | Use `0.0.0.0` only if you accept LAN risk |
+| `port` | `8180` | Prefer ≠ 8080 if Docker is installed |
 | `ngl` | `999` | GPU layers (Metal) |
-| `auto_ctx` | `true` | Size context from free RAM |
-| `launch_at_login` | `true` | First-run default |
-| `stop_server_on_quit` | `false` | Leave API up when quitting menu |
+| `batch` | `512` | Batch size |
+| `threads` | auto | Perf cores |
+| `stop_server_on_quit` | `true` | Stop `llama-server` when quitting the menu |
 
-Edit via **Settings → Edit Config…**, then **Reload Config**.
+Per-model launch prefs: `~/.config/llama-menu/model_prefs.json`
 
-## Layout
+---
 
-```
+## Project layout
+
+```text
 llama-menu/
-  llama_menu.py          # app
-  VERSION
-  requirements.txt
-  resources/             # icons
-  scripts/
-    build_app.sh         # → dist/Llama Menu.app
-    install.sh
-    uninstall.sh
-  dist/                  # build output (gitignored)
+├── NativeHost/main.swift    # Swift menu bar host (CFBundleExecutable)
+├── llama_core.py            # Optional Python helpers / panel backend
+├── launch_panel.py          # Recommended-settings UI
+├── open_launch_panel.py     # Bridge: Swift → settings panel
+├── resources/               # Icons, launch.html, SVG
+├── docs/assets/             # README images
+├── scripts/
+│   ├── build_app.sh         # Compile Swift → dist/Llama Menu.app
+│   ├── install.sh
+│   └── uninstall.sh
+└── VERSION
 ```
 
-## Security notes
+---
 
-- Binds to **localhost** by default.
-- Setting `host` to `0.0.0.0` exposes the OpenAI-compatible API on your network — only do this if you understand the risk.
-- App is **unsigned**. First open may need System Settings → Privacy & Security → Open Anyway.
+## Security
+
+- Binds to **localhost** by default — nothing leaves your machine unless you change `host`.
+- App is **unsigned**. First launch may need **System Settings → Privacy & Security → Open Anyway**.
+- Do not expose `0.0.0.0` unless you understand the risk of an open OpenAI-compatible API on your network.
+
+---
+
+## Credits
+
+- [**llama.cpp**](https://github.com/ggml-org/llama.cpp) — engine & WebUI  
+- [**Llama-macOS**](https://github.com/ggml-org/Llama-macOS) — status UX patterns  
+- [**llama-server-osx**](https://github.com/jaredkhan/llama-server-osx) — menu-bar workflow inspiration  
+
+---
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](LICENSE) © Llama Menu contributors
 
-App icon assets adapted from llama-server-osx (Draw Things–style mark). Menu glyph inspired by Llama-macOS.
+<p align="center">
+  <img src="docs/assets/menubar-on-lg.png" width="40" alt="" />
+  <br/>
+  <sub>100% local · Metal · GGUF</sub>
+</p>

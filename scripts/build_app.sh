@@ -23,6 +23,7 @@ cp "$ROOT/llama_menu.py" "$RES/llama_menu.py"
 cp "$ROOT/llama_core.py" "$RES/llama_core.py"
 cp "$ROOT/native_app.py" "$RES/native_app.py"
 cp "$ROOT/launch_panel.py" "$RES/launch_panel.py"
+cp "$ROOT/open_launch_panel.py" "$RES/open_launch_panel.py"
 cp "$ROOT/VERSION" "$RES/VERSION"
 cp "$ROOT/requirements.txt" "$RES/requirements.txt"
 cp "$ROOT/LICENSE" "$RES/LICENSE" 2>/dev/null || true
