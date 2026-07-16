@@ -1,0 +1,374 @@
+/*
+ * Shared chrome for the launch and settings panels.
+ *
+ * Both are hosted in a real NSPanel: the window frame, traffic lights, title
+ * and the blur behind the page are all AppKit. The page paints on transparent
+ * glass, so there is deliberately no body background and no window chrome here.
+ */
+:root {
+  --glass-strong: rgba(32, 32, 36, 0.55);
+  --glass-edge: rgba(255, 255, 255, 0.18);
+  --glass-edge-soft: rgba(255, 255, 255, 0.08);
+  --fill: rgba(255, 255, 255, 0.08);
+  --fill-hover: rgba(255, 255, 255, 0.12);
+  --text: rgba(255, 255, 255, 0.92);
+  --text-sec: rgba(255, 255, 255, 0.55);
+  --text-ter: rgba(255, 255, 255, 0.38);
+  --accent: #0a84ff;
+  --accent-soft: rgba(10, 132, 255, 0.22);
+  --green: #30d158;
+  --green-soft: rgba(48, 209, 88, 0.18);
+  --amber: #ff9f0a;
+  --danger: #ff453a;
+  --radius: 12px;
+  --radius-sm: 9px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Helvetica Neue", system-ui, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: transparent;
+  font: 13px/1.4 var(--font);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  cursor: default;
+  user-select: none;
+}
+
+/* Dialog layout: the middle scrolls, the action bar never leaves. */
+.sheet {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* Top padding clears the real, transparent titlebar. */
+  padding: 34px 18px 6px;
+}
+.footer {
+  flex-shrink: 0;
+  padding: 12px 18px 14px;
+  border-top: 1px solid var(--glass-edge-soft);
+  background: rgba(22, 22, 26, 0.6);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+/* Header */
+.meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.brand { display: flex; gap: 12px; align-items: center; min-width: 0; }
+.logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(48, 209, 88, 0.9), rgba(10, 132, 255, 0.75));
+  box-shadow: 0 8px 24px rgba(10, 132, 255, 0.25),
+    0 0 0 0.5px rgba(255, 255, 255, 0.25) inset;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.name {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  user-select: text;
+}
+.sub { margin-top: 3px; font-size: 12px; color: var(--text-sec); line-height: 1.35; }
+.badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--green);
+  background: var(--green-soft);
+  border: 1px solid rgba(48, 209, 88, 0.28);
+  padding: 6px 11px;
+  border-radius: 999px;
+}
+
+/* Cards */
+.card {
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-edge-soft);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.2) inset;
+}
+.card h2 {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-ter);
+  margin-bottom: 12px;
+}
+
+.rec-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.rec-chip {
+  font-size: 12px;
+  color: var(--text-sec);
+  background: var(--fill);
+  border: 1px solid var(--glass-edge-soft);
+  border-radius: 999px;
+  padding: 5px 11px;
+}
+.rec-chip b { color: var(--text); font-weight: 600; margin-left: 2px; }
+.hint { font-size: 12px; color: var(--text-sec); line-height: 1.4; }
+.hint.tight { margin-top: 8px; }
+.hint.amber { color: var(--amber); }
+.hint.danger { color: var(--danger); }
+
+/* Fields */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+@media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field.full { grid-column: 1 / -1; }
+label {
+  font-size: 12px;
+  color: var(--text-sec);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+label em {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-ter);
+}
+
+input[type="number"],
+input[type="text"] {
+  appearance: none;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text);
+  border: 1px solid var(--glass-edge-soft);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  font: 13px/1.3 var(--font);
+  outline: none;
+  user-select: text;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+input:hover { background: rgba(0, 0, 0, 0.34); }
+input:focus {
+  border-color: rgba(10, 132, 255, 0.65);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: rgba(0, 0, 0, 0.4);
+}
+input.invalid { border-color: rgba(255, 69, 58, 0.7); }
+
+/* Chips */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  min-width: 48px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-edge-soft);
+  background: var(--fill);
+  color: var(--text-sec);
+  font: 600 12px/1 var(--font);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.chip:hover { background: var(--fill-hover); color: var(--text); }
+.chip.active {
+  color: #fff;
+  background: linear-gradient(180deg, #2b95ff 0%, #0a84ff 100%);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 16px rgba(10, 132, 255, 0.35);
+}
+
+/* Settings rows: title + one-line description, control on the trailing edge. */
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--glass-edge-soft);
+}
+.row:last-child { border-bottom: none; }
+.row .rl { min-width: 0; }
+.row .rt { font-size: 13px; color: var(--text); }
+.row .rd { margin-top: 2px; font-size: 11.5px; color: var(--text-sec); line-height: 1.35; }
+.row .rc { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+.row .rc input[type="number"], .row .rc input[type="text"] { width: 110px; }
+
+/* Already abbreviated host-side, so no CSS truncation trickery is needed. */
+.path {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-sec);
+  white-space: nowrap;
+  user-select: text;
+}
+
+/* Switch */
+.switch {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  border: none;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.16s ease;
+}
+.switch.on { background: var(--green); }
+.switch.on::after { transform: translateX(16px); }
+
+/* Meter */
+.meter { margin-top: 12px; }
+.meter-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+.meter-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #30d158, #2fd4a0);
+  transition: width 0.18s ease, background 0.18s ease;
+}
+.meter-fill.warn { background: linear-gradient(90deg, #ff9f0a, #ffbe4d); }
+.meter-fill.over { background: linear-gradient(90deg, #ff453a, #ff7a70); }
+.meter-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 7px;
+  font-size: 11.5px;
+  color: var(--text-sec);
+}
+.meter-row b { color: var(--text); font-weight: 600; }
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 2px 0;
+  font-size: 12.5px;
+  color: var(--text-sec);
+  cursor: pointer;
+}
+.check input { width: 15px; height: 15px; accent-color: var(--accent); }
+
+/* Buttons */
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.spacer { flex: 1; min-width: 8px; }
+
+button.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font: 600 13px/1 var(--font);
+  cursor: pointer;
+  transition: transform 0.08s, filter 0.12s, background 0.12s, opacity 0.12s;
+}
+button.btn:active:not(:disabled) { transform: scale(0.98); }
+button.btn:disabled { opacity: 0.45; cursor: default; }
+button.btn.ghost {
+  color: var(--text-sec);
+  background: var(--fill);
+  border: 1px solid var(--glass-edge-soft);
+}
+button.btn.ghost:hover:not(:disabled) { color: var(--text); background: var(--fill-hover); }
+button.btn.small { padding: 6px 12px; font-size: 12px; }
+button.btn.default {
+  color: #fff;
+  padding: 11px 28px;
+  background: linear-gradient(180deg, #2b95ff 0%, #0071e3 100%);
+  box-shadow: 0 6px 24px rgba(10, 132, 255, 0.4),
+    0 0 0 0.5px rgba(255, 255, 255, 0.2) inset;
+}
+button.btn.default:hover:not(:disabled) { filter: brightness(1.06); }
+
+.statusbar {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--text-ter);
+}
+.statusbar div { flex: 1; }
+.statusbar #statusRight { text-align: right; }
+
+/* Read-only command preview */
+.code {
+  margin-top: 10px;
+  padding: 10px 11px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--glass-edge-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-sec);
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+}
+
+.ok { display: none; text-align: center; padding: 48px 20px; }
+.ok.show {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.ok .pulse {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 14px;
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(48, 209, 88, 0.9), rgba(10, 132, 255, 0.8));
+  box-shadow: 0 12px 40px rgba(48, 209, 88, 0.3);
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+}
+.ok .big { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 6px; }
+.ok p { color: var(--text-sec); font-size: 13px; }
+form.hide { display: none; }

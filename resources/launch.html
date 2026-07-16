@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:;" />
+<title>Launch</title>
+<!--STYLE-->
+</head>
+<body>
+  <div id="ok" class="ok">
+    <div class="pulse">✓</div>
+    <div class="big">Starting model…</div>
+    <p>This window will close on its own.</p>
+  </div>
+
+  <form id="form" class="sheet">
+    <div class="scroll">
+      <div class="meta">
+        <div class="brand">
+          <div class="logo">🦙</div>
+          <div>
+            <div class="name" id="modelName"></div>
+            <div class="sub" id="modelMeta"></div>
+          </div>
+        </div>
+        <div class="badge">Max for this Mac</div>
+      </div>
+
+      <section class="card">
+        <h2>Recommended</h2>
+        <div class="rec-row" id="recChips"></div>
+        <p class="hint tight" id="recHint"></p>
+      </section>
+
+      <section class="card">
+        <h2>Runtime</h2>
+
+        <div class="field full" style="margin-bottom:12px">
+          <label>Context <em>-c</em></label>
+          <div class="chips" id="ctxChips"></div>
+        </div>
+
+        <div class="field full">
+          <label>KV cache <em>-ctk / -ctv</em></label>
+          <div class="chips" id="kvChips"></div>
+        </div>
+
+        <div class="meter">
+          <div class="meter-track"><div class="meter-fill" id="meterFill"></div></div>
+          <div class="meter-row">
+            <span id="meterText"></span>
+            <span id="meterBudget"></span>
+          </div>
+        </div>
+
+        <div class="grid" style="margin-top:14px">
+          <div class="field">
+            <label>Context tokens <em>ctx</em></label>
+            <input type="number" name="ctx" id="ctx" min="512" step="512" />
+          </div>
+          <div class="field">
+            <label>GPU layers <em>-ngl</em></label>
+            <input type="number" name="ngl" id="ngl" min="0" max="999" step="1" />
+          </div>
+          <div class="field">
+            <label>CPU threads <em>-t</em></label>
+            <input type="number" name="threads" id="threads" min="1" max="128" step="1" />
+          </div>
+          <div class="field">
+            <label>Batch size <em>-b</em></label>
+            <input type="number" name="batch" id="batch" min="32" max="8192" step="32" />
+          </div>
+          <div class="field">
+            <label>Max tokens <em>-n</em></label>
+            <input type="number" name="n_predict" id="n_predict" min="-1" step="1" />
+          </div>
+          <div class="field">
+            <label>Seed <em>-s</em></label>
+            <input type="number" name="seed" id="seed" step="1" />
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Sampling</h2>
+        <div class="grid">
+          <div class="field">
+            <label>Temperature <em>--temp</em></label>
+            <input type="number" name="temperature" id="temperature" min="0" max="2" step="0.05" />
+          </div>
+          <div class="field">
+            <label>Top‑p <em>--top-p</em></label>
+            <input type="number" name="top_p" id="top_p" min="0" max="1" step="0.01" />
+          </div>
+          <div class="field">
+            <label>Top‑k <em>--top-k</em></label>
+            <input type="number" name="top_k" id="top_k" min="0" max="200" step="1" />
+          </div>
+          <div class="field">
+            <label>Min‑p <em>--min-p</em></label>
+            <input type="number" name="min_p" id="min_p" min="0" max="1" step="0.01" />
+          </div>
+          <div class="field">
+            <label>Repeat penalty <em>--repeat-penalty</em></label>
+            <input type="number" name="repeat_penalty" id="repeat_penalty" min="0.5" max="2" step="0.05" />
+          </div>
+          <div class="field">
+            <label>Repeat last N <em>--repeat-last-n</em></label>
+            <input type="number" name="repeat_last_n" id="repeat_last_n" min="-1" step="1" />
+          </div>
+        </div>
+      </section>
+
+      <label class="check">
+        <input type="checkbox" name="save_defaults" id="save_defaults" checked />
+        Remember for this model
+      </label>
+    </div>
+
+    <div class="footer">
+      <div class="actions">
+        <button type="button" class="btn ghost" id="btnReset">Reset to max</button>
+        <div class="spacer"></div>
+        <button type="button" class="btn ghost" id="btnCancel">Cancel</button>
+        <button type="submit" class="btn default" id="btnStart">Start model</button>
+      </div>
+      <div class="statusbar">
+        <div id="statusLeft">Ready</div>
+        <div id="statusRight"></div>
+      </div>
+    </div>
+  </form>
+
+<script>
+"use strict";
+
+// Injected by the host as a WKUserScript before this document runs.
+const D = window.DEFAULTS || {};
+const NUM_KEYS = [
+  "ctx", "ngl", "threads", "batch", "n_predict", "seed",
+  "temperature", "top_p", "top_k", "min_p", "repeat_penalty", "repeat_last_n"
+];
+
+function $(id) { return document.getElementById(id); }
+
+function send(action, extra) {
+  try {
+    window.webkit.messageHandlers.bridge.postMessage(
+      Object.assign({ action: action }, extra || {})
+    );
+  } catch (e) {
+    $("statusLeft").textContent = "Lost connection to Llama Menu";
+  }
+}
+
+function fmtCtx(n) {
+  if (n >= 1024 && n % 1024 === 0) return (n / 1024) + "K";
+  if (n >= 1024) return (n / 1024).toFixed(1) + "K";
+  return String(n);
+}
+
+function currentCache() {
+  const active = document.querySelector("#kvChips .chip.active");
+  return active ? active.dataset.kv : (D.recommended && D.recommended.cache_type_k) || "f16";
+}
+
+/* Memory is recomputed here rather than round-tripping to the host: KV size is
+   linear in context, so per-token cost from the host is all that's needed. */
+function updateMeter() {
+  const ctx = Number($("ctx").value) || 0;
+  const kv = currentCache();
+  const total = ((D.kv_per_token_gb || {})[kv] || 0) * ctx + (D.overhead_gb || 0);
+  const budget = D.budget_gb || 0;
+
+  const pct = budget > 0 ? Math.min(100, (total / budget) * 100) : 0;
+  const fill = $("meterFill");
+  fill.style.width = pct + "%";
+  fill.classList.toggle("warn", pct >= 75 && pct < 100);
+  fill.classList.toggle("over", total > budget);
+
+  $("meterText").innerHTML =
+    "KV + buffers <b>≈ " + total.toFixed(1) + " GB</b> at " + fmtCtx(ctx) + " · " + kv;
+  $("meterBudget").textContent = "budget " + budget.toFixed(1) + " GB";
+
+  const start = $("btnStart");
+  if (total > budget) {
+    $("statusLeft").textContent = "Over budget — may swap or fail to load";
+    start.textContent = "Start anyway";
+  } else {
+    start.textContent = "Start model";
+  }
+}
+
+function syncChips() {
+  const ctx = Number($("ctx").value);
+  document.querySelectorAll("#ctxChips .chip").forEach(function (ch) {
+    ch.classList.toggle("active", Number(ch.dataset.ctx) === ctx);
+  });
+  updateMeter();
+}
+
+function apply(values) {
+  NUM_KEYS.forEach(function (k) {
+    if (values[k] === undefined) return;
+    const el = $(k);
+    if (el) el.value = values[k];
+  });
+  if (values.cache_type_k) {
+    document.querySelectorAll("#kvChips .chip").forEach(function (ch) {
+      ch.classList.toggle("active", ch.dataset.kv === values.cache_type_k);
+    });
+  }
+  syncChips();
+}
+
+function buildChips(host, items, key, onPick) {
+  host.innerHTML = "";
+  items.forEach(function (item) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.dataset[key] = item.value;
+    b.textContent = item.label;
+    b.addEventListener("click", function () { onPick(item.value, b); });
+    host.appendChild(b);
+  });
+}
+
+function buildUi() {
+  $("modelName").textContent = D.model_name || "";
+  $("modelMeta").textContent = D.model_meta || "";
+
+  const rec = D.recommended || {};
+  const recRow = $("recChips");
+  recRow.innerHTML = "";
+  [
+    ["ctx", fmtCtx(rec.ctx || 0)],
+    ["kv", rec.cache_type_k || "f16"],
+    ["ngl", rec.ngl],
+    ["threads", rec.threads],
+    ["batch", rec.batch],
+    ["temp", rec.temperature]
+  ].forEach(function (pair) {
+    const s = document.createElement("span");
+    s.className = "rec-chip";
+    s.appendChild(document.createTextNode(pair[0] + " "));
+    const b = document.createElement("b");
+    b.textContent = String(pair[1]);
+    s.appendChild(b);
+    recRow.appendChild(s);
+  });
+
+  const hint = D.recommend_reason || "";
+  $("recHint").textContent = hint;
+  $("recHint").style.display = hint ? "block" : "none";
+
+  buildChips(
+    $("ctxChips"),
+    (D.tiers || []).map(function (n) { return { value: n, label: fmtCtx(n) }; }),
+    "ctx",
+    function (n) {
+      $("ctx").value = n;
+      syncChips();
+      $("statusLeft").textContent = "Context " + fmtCtx(n);
+    }
+  );
+
+  buildChips(
+    $("kvChips"),
+    (D.cache_types || ["f16"]).map(function (id) { return { value: id, label: id }; }),
+    "kv",
+    function (id, btn) {
+      document.querySelectorAll("#kvChips .chip").forEach(function (c) {
+        c.classList.remove("active");
+      });
+      btn.classList.add("active");
+      updateMeter();
+      $("statusLeft").textContent = "KV cache " + id;
+    }
+  );
+
+  const hw = D.hardware || {};
+  $("statusRight").textContent =
+    Math.round(hw.total_ram_gb || 0) + " GB RAM · " + (hw.perf_cores || 0) + " threads";
+
+  apply(D.values || {});
+  $("ctx").addEventListener("input", syncChips);
+}
+
+function collect() {
+  const out = {};
+  NUM_KEYS.forEach(function (k) {
+    const el = $(k);
+    if (el) out[k] = Number(el.value);
+  });
+  const kv = currentCache();
+  out.cache_type_k = kv;
+  out.cache_type_v = kv;
+  return out;
+}
+
+$("btnReset").addEventListener("click", function () {
+  apply(D.recommended || {});
+  $("statusLeft").textContent = "Reset to max";
+});
+
+$("btnCancel").addEventListener("click", function () { send("cancel"); });
+
+$("form").addEventListener("submit", function (e) {
+  e.preventDefault();
+  $("btnStart").disabled = true;
+  $("form").classList.add("hide");
+  $("ok").classList.add("show");
+  send("launch", { params: collect(), save_defaults: $("save_defaults").checked });
+});
+
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Escape") send("cancel");
+});
+
+buildUi();
+</script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:;" />
+<title>Settings</title>
+<!--STYLE-->
+</head>
+<body>
+  <div class="sheet">
+    <div class="scroll">
+      <div class="meta">
+        <div class="brand">
+          <div class="logo">🦙</div>
+          <div>
+            <div class="name">Llama Menu</div>
+            <div class="sub" id="version"></div>
+          </div>
+        </div>
+      </div>
+
+      <section class="card">
+        <h2>General</h2>
+
+        <div class="row">
+          <div class="rl">
+            <div class="rt">Launch at login</div>
+            <div class="rd">Sits idle in the menu bar, using minimal memory.</div>
+          </div>
+          <div class="rc">
+            <button class="switch" id="launch_at_login" type="button"
+                    aria-label="Launch at login"></button>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="rl">
+            <div class="rt">Stop server on quit</div>
+            <div class="rd">Leave off to keep the model loaded after quitting.</div>
+          </div>
+          <div class="rc">
+            <button class="switch" id="stop_server_on_quit" type="button"
+                    aria-label="Stop server on quit"></button>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="rl">
+            <div class="rt">Model directory</div>
+            <div class="rd">Scanned for <code>.gguf</code> files. Folders become groups.</div>
+          </div>
+          <div class="rc">
+            <span class="path" id="models_dir"></span>
+            <button class="btn ghost small" id="pickModels" type="button">Choose…</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Server</h2>
+
+        <div class="row">
+          <div class="rl">
+            <div class="rt">Port</div>
+            <div class="rd">Default 8180. Docker usually owns 8080.</div>
+          </div>
+          <div class="rc">
+            <input type="number" id="port" min="1024" max="65535" step="1" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="rl">
+            <div class="rt">Expose to network</div>
+            <div class="rd" id="hostDesc">Localhost only.</div>
+          </div>
+          <div class="rc">
+            <button class="switch" id="expose" type="button" aria-label="Expose to network"></button>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="rl">
+            <div class="rt">Default KV cache</div>
+            <div class="rd">The launch panel can override it per model.</div>
+          </div>
+          <div class="rc">
+            <div class="chips" id="kvChips"></div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="rl">
+            <div class="rt">llama-server</div>
+            <div class="rd" id="binDesc"></div>
+          </div>
+          <div class="rc">
+            <span class="path" id="llama_server"></span>
+            <button class="btn ghost small" id="pickBinary" type="button">Choose…</button>
+          </div>
+        </div>
+
+        <p class="hint amber" id="restartNote" style="display:none">
+          Port and network changes apply the next time a model starts.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Server command</h2>
+        <p class="hint">The invocation these settings produce.</p>
+        <div class="code" id="cmd"></div>
+      </section>
+    </div>
+
+    <div class="footer">
+      <div class="actions">
+        <button class="btn ghost" id="btnReveal" type="button">Show config file</button>
+        <div class="spacer"></div>
+        <button class="btn default" id="btnDone" type="button">Done</button>
+      </div>
+      <div class="statusbar">
+        <div id="statusLeft">Changes save as you make them</div>
+        <div id="statusRight"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+"use strict";
+
+let S = window.DEFAULTS || {};
+
+function $(id) { return document.getElementById(id); }
+
+function send(action, extra) {
+  try {
+    window.webkit.messageHandlers.bridge.postMessage(
+      Object.assign({ action: action }, extra || {})
+    );
+  } catch (e) {
+    $("statusLeft").textContent = "Lost connection to Llama Menu";
+  }
+}
+
+function set(key, value) {
+  send("set", { key: key, value: value });
+  $("statusLeft").textContent = "Saved";
+}
+
+function bindSwitch(id, get, onChange) {
+  const el = $(id);
+  el.addEventListener("click", function () {
+    const next = !el.classList.contains("on");
+    el.classList.toggle("on", next);
+    onChange(next);
+  });
+  el.classList.toggle("on", !!get());
+}
+
+/* Called by the host after it applies a change (e.g. a folder picker), so the
+   page never has to guess what was actually persisted. */
+window.applyState = function (state) {
+  S = state;
+  render();
+};
+
+function render() {
+  $("version").textContent = "Version " + (S.version || "");
+  $("models_dir").textContent = S.models_dir || "";
+  $("models_dir").title = S.models_dir_full || "";
+  $("llama_server").textContent = S.has_binary ? S.llama_server : "Not found";
+  $("port").value = S.port || 8180;
+
+  $("launch_at_login").classList.toggle("on", !!S.launch_at_login);
+  $("stop_server_on_quit").classList.toggle("on", !!S.stop_server_on_quit);
+  $("expose").classList.toggle("on", !!S.exposed);
+
+  $("hostDesc").textContent = S.exposed
+    ? "Binding 0.0.0.0 — any device on your network can use the API."
+    : "Localhost only.";
+  $("hostDesc").className = S.exposed ? "rd amber" : "rd";
+
+  $("binDesc").textContent = S.has_binary
+    ? "Found automatically."
+    : "Not found — brew install llama.cpp";
+
+  $("restartNote").style.display = S.running ? "block" : "none";
+  $("statusRight").textContent = S.running ? "Server running" : "Server stopped";
+
+  const host = $("kvChips");
+  host.innerHTML = "";
+  (S.cache_types || []).forEach(function (id) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip" + (id === S.kv_cache_type ? " active" : "");
+    b.textContent = id;
+    b.addEventListener("click", function () {
+      document.querySelectorAll("#kvChips .chip").forEach(function (c) {
+        c.classList.remove("active");
+      });
+      b.classList.add("active");
+      set("kv_cache_type", id);
+    });
+    host.appendChild(b);
+  });
+
+  $("cmd").textContent = S.command || "";
+}
+
+$("port").addEventListener("change", function () {
+  const v = Number($("port").value);
+  const ok = Number.isInteger(v) && v >= 1024 && v <= 65535;
+  $("port").classList.toggle("invalid", !ok);
+  if (ok) {
+    set("port", v);
+  } else {
+    $("statusLeft").textContent = "Port must be between 1024 and 65535";
+  }
+});
+
+$("pickModels").addEventListener("click", function () { send("pickModelsDir"); });
+$("pickBinary").addEventListener("click", function () { send("pickBinary"); });
+$("btnReveal").addEventListener("click", function () { send("revealConfig"); });
+$("btnDone").addEventListener("click", function () { send("close"); });
+
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Escape") send("close");
+});
+
+bindSwitch("launch_at_login", function () { return S.launch_at_login; },
+  function (v) { set("launch_at_login", v); });
+bindSwitch("stop_server_on_quit", function () { return S.stop_server_on_quit; },
+  function (v) { set("stop_server_on_quit", v); });
+bindSwitch("expose", function () { return S.exposed; },
+  function (v) { set("exposed", v); });
+
+render();
+</script>
+</body>
+</html>

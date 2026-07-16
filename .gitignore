@@ -1,0 +1,15 @@
+dist/
+build/
+*.pyc
+__pycache__/
+.Python
+*.egg-info/
+.DS_Store
+*.log
+.venv/
+venv/
+.env
+*.app.bak
+
+# Local reference clones (not part of this project)
+docs/reference/
