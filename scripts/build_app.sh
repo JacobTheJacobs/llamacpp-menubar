@@ -18,30 +18,36 @@ rm -rf "$APP"
 mkdir -p "$MACOS" "$RES"
 
 # --- Resources --------------------------------------------------------------
-mkdir -p "$RES/resources"
-cp "$ROOT/llama_menu.py" "$RES/llama_menu.py"
-cp "$ROOT/llama_core.py" "$RES/llama_core.py"
-cp "$ROOT/native_app.py" "$RES/native_app.py"
-cp "$ROOT/launch_panel.py" "$RES/launch_panel.py"
-cp "$ROOT/open_launch_panel.py" "$RES/open_launch_panel.py"
 cp "$ROOT/VERSION" "$RES/VERSION"
-cp "$ROOT/requirements.txt" "$RES/requirements.txt"
 cp "$ROOT/LICENSE" "$RES/LICENSE" 2>/dev/null || true
 cp "$ROOT/resources/launch.html" "$RES/launch.html"
-cp "$ROOT/resources/launch.html" "$RES/resources/launch.html"
+cp "$ROOT/resources/settings.html" "$RES/settings.html"
+cp "$ROOT/resources/panel.css" "$RES/panel.css"
+# Menu bar glyphs: hollow (off) + solid (on). SVG loads straight into NSImage,
+# so there is no rasterisation step and no @2x variants to keep in sync.
+cp "$ROOT/resources/menu-llama-off.svg" "$RES/menu-llama-off.svg"
+cp "$ROOT/resources/menu-llama-on.svg" "$RES/menu-llama-on.svg"
 cp "$ROOT/resources/icon.icns" "$RES/AppIcon.icns"
-# Menu-bar glyphs: hollow (off) + solid (on) — both required for status cue
-cp "$ROOT/resources/"menu_icon*.png "$RES/" 2>/dev/null || true
-cp "$ROOT/resources/"menu_icon*.png "$RES/resources/" 2>/dev/null || true
-cp "$ROOT/resources/icon.icns" "$RES/resources/icon.icns" 2>/dev/null || true
 
 # --- Native Swift binary ----------------------------------------------------
 # The CFBundleExecutable MUST be a real Mach-O binary owned by this app.
 # A bash→Python host shows as "Python" to macOS; status items often never appear.
 echo "==> Compiling native Swift host…"
+# main.swift last: top-level code is only legal in that file, and swiftc wants
+# it named main.swift, but ordering keeps the intent obvious.
 swiftc -O \
   -target arm64-apple-macos13.0 \
   -o "$MACOS/Llama Menu" \
+  "$ROOT/NativeHost/Util.swift" \
+  "$ROOT/NativeHost/Config.swift" \
+  "$ROOT/NativeHost/Hardware.swift" \
+  "$ROOT/NativeHost/GGUF.swift" \
+  "$ROOT/NativeHost/Recommender.swift" \
+  "$ROOT/NativeHost/LaunchAtLogin.swift" \
+  "$ROOT/NativeHost/WebPanel.swift" \
+  "$ROOT/NativeHost/LaunchPanel.swift" \
+  "$ROOT/NativeHost/SettingsPanel.swift" \
+  "$ROOT/NativeHost/AppController.swift" \
   "$ROOT/NativeHost/main.swift"
 chmod +x "$MACOS/Llama Menu"
 file "$MACOS/Llama Menu"

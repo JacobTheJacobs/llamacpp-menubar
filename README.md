@@ -18,7 +18,7 @@
   <img alt="Swift" src="https://img.shields.io/badge/Swift-5-F05138?style=for-the-badge&logo=swift&logoColor=white" />
   <img alt="llama.cpp" src="https://img.shields.io/badge/llama.cpp-server-1a1a2e?style=for-the-badge" />
   <img alt="License" src="https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge" />
-  <img alt="Version" src="https://img.shields.io/badge/version-1.6.0-3b82f6?style=for-the-badge" />
+  <img alt="Version" src="https://img.shields.io/badge/version-2.0.0-3b82f6?style=for-the-badge" />
   <img alt="Local" src="https://img.shields.io/badge/100%25-local-a855f7?style=for-the-badge" />
 </p>
 
@@ -49,15 +49,19 @@
 The live control lives in the **top-right** of the menu bar (near Wi‑Fi / clock):
 
 <p align="center">
-  <img src="docs/assets/menubar-mock.png" width="560" alt="Menu bar mock with Llama Menu" />
+  <img src="docs/assets/menubar-states.png" width="620" alt="Menu bar glyph in stopped, starting, running and error states, on light and dark menu bars" />
 </p>
 
-| State | Icon | Label |
-|:-----:|:----:|:------|
-| **Off** | <img src="docs/assets/menubar-off-lg.png" width="48" /> | `🦙 Llama` |
-| **On** | <img src="docs/assets/menubar-on-lg.png" width="48" /> | `🦙 Llama !` (green tile) |
-| **Starting** | <img src="docs/assets/menubar-busy-lg.png" width="48" /> | `🦙 Llama …` (orange) |
-| **Error** | <img src="docs/assets/menubar-error-lg.png" width="48" /> | `🦙 Llama ×` (red) |
+| State | Glyph |
+|:--|:--|
+| **Off** | Hollow llama, matching the menu bar |
+| **Starting** | Solid, orange |
+| **On** | Solid, green |
+| **Error** | Solid, red |
+
+The glyph is a vector template image (`resources/menu-llama-*.svg`), so it adapts
+to light and dark menu bars, tinting, and Reduce Transparency on its own. Hollow
+vs solid carries the state without depending on colour.
 
 > **Tip:** If the bar is crowded, check the **`»`** overflow on the right side of the menu bar.
 
@@ -75,42 +79,69 @@ Drop GGUF files under `~/models` (folders become groups in the menu). Vision mod
   <sub>Cards above reflect folders on this machine (Qwen, DictaLM, UI-Venus, …). Any <code>.gguf</code> works.</sub>
 </p>
 
-### Launch settings (classic UI)
+### Launch panel
 
-Pick a model and get a **MAX for this Mac** panel — auto-probes RAM, free memory, perf cores, and GPU, then picks the **largest safe context** and best threads/batch/Metal settings for *that* machine.
+Pick a model and get a **MAX for this Mac** window — a real `NSPanel`, not a browser
+tab. It reads the model's GGUF metadata and probes RAM, free memory, perf cores and
+GPU, then picks the largest context that genuinely fits, at the KV precision that
+makes it fit.
 
 <p align="center">
-  <img src="docs/assets/launch-panel-90s.png" width="640" alt="Classic 90s launch settings window" />
+  <img src="docs/assets/launch-panel-liquid.png" width="640" alt="Launch panel: recommended profile, context and KV cache tiers, live memory meter" />
 </p>
 
 <p align="center">
-  <sub>Hardware-aware max profile · tweak if you want · remember per model</sub>
+  <sub>Hardware-aware max profile · live memory meter · remembered per model</sub>
 </p>
+
+### Settings
+
+<p align="center">
+  <img src="docs/assets/settings-panel.png" width="560" alt="Settings: launch at login, model directory, port, network exposure, default KV cache" />
+</p>
+
+<p align="center">
+  <sub>Menu bar → <b>Settings…</b> (⌘,) · changes save as you make them</sub>
+</p>
+
+| Setting | Notes |
+|:--|:--|
+| **Launch at login** | Registered via `SMAppService` — no LaunchAgent plist |
+| **Stop server on quit** | Turn off to keep the model loaded after quitting |
+| **Model directory** | Scanned recursively for `.gguf`; folders become menu groups |
+| **Port** | Default 8180 |
+| **Expose to network** | Off = localhost. On binds `0.0.0.0` — read the warning |
+| **Default KV cache** | Starting precision; the launch panel overrides per model |
+| **llama-server** | Auto-discovered, or point it at your own build |
+| **Server command** | Read-only preview of the invocation your settings produce |
 
 ### App icon
 
 <p align="center">
   <img src="docs/assets/app-icon.png" width="96" alt="App icon" />
-  &nbsp;&nbsp;&nbsp;
-  <img src="docs/assets/menubar-on-lg.png" width="72" alt="Menu bar on glyph" />
 </p>
 
 <p align="center">
-  <sub>Finder / app icon &nbsp;·&nbsp; Menu bar “on” glyph</sub>
+  <sub>Finder / app icon</sub>
 </p>
 
 ---
 
 ## Features
 
-- **Native Swift host** — real Mach-O binary (not a script-hosted status item)
-- **Recommended settings modal** — per-model panel with best-guess ctx / ngl / temp / top-p for your RAM
+- **One native binary** — no Python, no runtime dependencies, real Mach-O host
+- **Real launch window** — an `NSPanel` with genuine traffic lights, not a browser tab
+- **Reads the model, not just the file size** — GGUF metadata gives the exact KV
+  geometry and the trained context, so context tiers above what the model
+  supports are never offered
+- **KV cache precision** — `f16` / `q8_0` / `q5_1` / `q4_0` with a live memory
+  meter; quantizing the cache is what buys a bigger context on a fixed budget
 - **Start / switch / stop** from the menu
 - **Open Chat** → `http://127.0.0.1:8180/` (avoids Docker on 8080)
 - **Metal** via `-ngl 999` by default
-- **Health checks** — “Ready” only when `/health` answers
-- **Stop server on quit** (toggle in menu)
-- **Logs** at `~/.config/llama-menu/logs/server.log`
+- **Health checks** — “Ready” only when `/health` answers, and it keeps checking
+- **Stop server on quit** (toggle in Settings)
+- **Logs** at `~/.config/llama-menu/logs/server.log` (rotated at 8 MB)
 
 ---
 
@@ -120,10 +151,12 @@ Pick a model and get a **MAX for this Mac** panel — auto-probes RAM, free memo
 
 | Dependency | Notes |
 |:-----------|:------|
-| **macOS 13+** | Apple Silicon recommended |
+| **macOS 13+** | Apple Silicon required (the host targets `arm64`) |
 | **[llama.cpp](https://github.com/ggml-org/llama.cpp)** | `brew install llama.cpp` |
 | **GGUF models** | e.g. under `~/models/**/*.gguf` |
 | **Xcode CLT / Swift** | To build the native host (`swiftc`) |
+
+The app itself has no runtime dependencies — it is a single Swift binary.
 
 ### Build & install
 
@@ -145,6 +178,12 @@ Build only:
 open "dist/Llama Menu.app"
 ```
 
+Run the tests:
+
+```sh
+./scripts/test.sh
+```
+
 Uninstall:
 
 ```sh
@@ -156,10 +195,10 @@ Uninstall:
 
 ## Usage
 
-1. Click **`🦙 Llama`** in the **menu bar** (top-right).
+1. Click the **llama glyph** in the **menu bar** (top-right).
 2. **Start Model** → pick a `.gguf`.
-3. **Settings panel** opens with recommended params for this Mac — tweak or **Start model**.
-4. Wait for **Ready** (notification + green **!**).
+3. The **launch panel** opens with the recommended profile for this Mac — tweak it or hit **Start model**.
+4. Wait for **Ready** (notification, and the glyph turns green).
 5. **Open Chat** or call the API:
 
 ```sh
@@ -192,9 +231,29 @@ curl http://127.0.0.1:8180/v1/chat/completions \
 | `ngl` | `999` | GPU layers (Metal) |
 | `batch` | `512` | Batch size |
 | `threads` | auto | Perf cores |
+| `kv_cache_type` | `f16` | Default KV precision; per-model prefs override it |
 | `stop_server_on_quit` | `true` | Stop `llama-server` when quitting the menu |
 
+Unknown keys are ignored and missing keys fall back to defaults, so the file is
+safe to hand-edit.
+
 Per-model launch prefs: `~/.config/llama-menu/model_prefs.json`
+
+### KV cache precision
+
+The KV cache is usually what limits context, not the weights. It scales linearly
+with context, so halving its precision roughly doubles the context that fits:
+
+| Type | Bytes/element | Relative size | Notes |
+|:-----|:--------------|:--------------|:------|
+| `f16` | 2 | 100% | Default, lossless |
+| `q8_0` | 1.0625 | ~53% | Near-lossless; auto-picked when it buys more context |
+| `q5_1` | 0.75 | ~38% | Noticeable on long reasoning chains |
+| `q4_0` | 0.5625 | ~28% | Smallest; measurable quality cost |
+
+Anything below `f16` passes `-fa on`, since a quantized V cache requires flash
+attention. Sizes are computed from GGUF metadata and match `llama-server`'s own
+reported allocation exactly.
 
 ---
 
@@ -202,14 +261,21 @@ Per-model launch prefs: `~/.config/llama-menu/model_prefs.json`
 
 ```text
 llama-menu/
-├── NativeHost/main.swift    # Swift menu bar host (CFBundleExecutable)
-├── llama_core.py            # Optional Python helpers / panel backend
-├── launch_panel.py          # Recommended-settings UI
-├── open_launch_panel.py     # Bridge: Swift → settings panel
-├── resources/               # Icons, launch.html, SVG
+├── NativeHost/              # The entire app — one Swift binary, no runtime deps
+│   ├── main.swift           # Entry point + single-instance lock
+│   ├── AppController.swift  # Status item, menu, server lifecycle
+│   ├── LaunchPanel.swift    # NSPanel + WKWebView settings window
+│   ├── Recommender.swift    # Profile selection, KV sizing, param sanitizing
+│   ├── GGUF.swift           # GGUF metadata reader (trained ctx, KV geometry)
+│   ├── Hardware.swift       # RAM / cores / GPU probe
+│   ├── Config.swift         # config.json + per-model prefs
+│   └── Util.swift           # Paths, logging, model discovery
+├── Tests/main.swift         # Hermetic logic tests
+├── resources/               # Icons + launch.html (the panel UI)
 ├── docs/assets/             # README images
 ├── scripts/
 │   ├── build_app.sh         # Compile Swift → dist/Llama Menu.app
+│   ├── test.sh              # Run Tests/
 │   ├── install.sh
 │   └── uninstall.sh
 └── VERSION
@@ -220,6 +286,13 @@ llama-menu/
 ## Security
 
 - Binds to **localhost** by default — nothing leaves your machine unless you change `host`.
+- The launch panel is an in-process `WKWebView` loading local HTML with a nil
+  base URL, so it has an opaque origin and no network access. It runs no local
+  HTTP server, which is what a page in a browser tab would have required.
+- Values from the panel are clamped in Swift before they reach the command line,
+  and the `mmproj` path always comes from a disk scan rather than the page.
+- Llama Menu only ever signals `llama-server` processes on **its own configured
+  port**, so servers you started yourself are left alone.
 - App is **unsigned**. First launch may need **System Settings → Privacy & Security → Open Anyway**.
 - Do not expose `0.0.0.0` unless you understand the risk of an open OpenAI-compatible API on your network.
 
@@ -236,7 +309,5 @@ llama-menu/
 [MIT](LICENSE) © Llama Menu contributors
 
 <p align="center">
-  <img src="docs/assets/menubar-on-lg.png" width="40" alt="" />
-  <br/>
   <sub>100% local · Metal · GGUF</sub>
 </p>

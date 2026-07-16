@@ -18,42 +18,6 @@ if [[ ! -d "$SRC" ]]; then
   exit 1
 fi
 
-# Ensure rumps is available for the Python we'll use
-ensure_rumps() {
-  local py
-  for py in \
-    "/Library/Developer/CommandLineTools/usr/bin/python3" \
-    "/opt/homebrew/bin/python3" \
-    "/usr/local/bin/python3" \
-    "/usr/bin/python3"
-  do
-    [[ -x "$py" ]] || continue
-    if "$py" -c "import rumps" 2>/dev/null; then
-      echo "rumps OK ($py)"
-      return 0
-    fi
-  done
-  echo "Installing rumps for user Python..."
-  local installer=""
-  for py in \
-    "/Library/Developer/CommandLineTools/usr/bin/python3" \
-    "/opt/homebrew/bin/python3" \
-    "/usr/bin/python3"
-  do
-    if [[ -x "$py" ]]; then
-      installer="$py"
-      break
-    fi
-  done
-  if [[ -z "$installer" ]]; then
-    echo "error: no python3 found" >&2
-    exit 1
-  fi
-  "$installer" -m pip install --user -r "$ROOT/requirements.txt"
-}
-
-ensure_rumps
-
 # Check llama-server (soft requirement)
 if ! command -v llama-server >/dev/null 2>&1 \
   && [[ ! -x /opt/homebrew/bin/llama-server ]] \
@@ -87,7 +51,7 @@ echo "==> Installed: $DEST"
 open "$DEST"
 echo "==> Launched $APP_NAME"
 echo ""
-echo "Look for the menu bar icon (diamond / Llama Menu)."
+echo "Look for 🦙 Llama in the menu bar (top-right)."
 echo "Config:  ~/.config/llama-menu/config.json"
 echo "Models:  ~/models  (*.gguf)"
 echo "Uninstall: ./scripts/uninstall.sh"
